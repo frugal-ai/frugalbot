@@ -1,0 +1,5 @@
+$env:HTTP_PROXY="http://localhost:8001"
+$env:HTTPS_PROXY="http://localhost:8001"
+$env:CURL_CA_BUNDLE="C:\repo\http-toolkit-ca-certificate.crt"
+$env:SSL_CERT_FILE="C:\repo\http-toolkit-ca-certificate.crt"
+$env:NODE_EXTRA_CA_CERTS = "C:\repo\http-toolkit-ca-certificate.crt"

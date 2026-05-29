@@ -1,0 +1,17 @@
+- Add format field to tool output messages in conversation then use it to figure out the markup param when displaying on load
+- Add Loading indicator when /load is loading conversation (spinner doesn't work because UI freezes)
+
+- Re-write conversation history when a file changes (maybe via a /compact command)
+- Command parameters auto-complete
+- Subagents support (and multi-agent conversations eg. implementor-evaluator) / active conversations switcher
+- Add support for bash in auto-approval hook
+- bug with context usage (it seems to work but drops back down when context is large?)
+- validation hooks (programmatic validation, deterministic steps)
+- make tool guidelines part of the configuration
+- add agent finished hook (in addition to already available stop hook)
+- add logging facility
+- add support for http transport w/ mcp (use mcp-remote as a stopgap)
+- add list of pre-approved tools to auto approval hook
+- add regexp support in auto approval
+- namespace tools (bundled tools should be in frugalbot. namespace)
+- mock server to replay sessions for performance testing / profiling

@@ -1,0 +1,13 @@
+{
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            // Always sort imports automatically to keep diffs clean
+            "source.organizeImports.ruff": "always",
+            // Only apply other auto-fixes (UP, E, RUF) on explicit save/trigger
+            "source.fixAll.ruff": "explicit"
+        },
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "ruff.nativeServer": "on"
+}

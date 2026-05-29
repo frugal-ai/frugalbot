@@ -1,0 +1,408 @@
+[general]
+# arbitrary names for the different agents (ie. use the names that make sense for you)
+# each agent can be configured with different hooks, tools and prompts
+agents = ["coder", "wiki_master"]
+# the tool output format, either yaml or json
+# yaml saves on tokens, json adds tokens but is sometimes better understood by certain models
+tool_output_format = "yaml" # or "json"
+ # default thinking level for all clients, can be changed with the /thinking command during a session
+ # other valid values are "NONE", "LOW", "MEDIUM"
+thinking_level = "HIGH"
+
+# key-values in the following section are included in the config of all clients
+[clients.all]
+# list of providers / models that support xhigh reasoning w/ anyllm client
+xhigh_provider_models = [{ provider = 'openrouter', models = ["deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro", "inclusionai/ring-2.6-1t:free"]}]
+# enable xhigh reasoning by setting use_xhigh_not_high=true in this block or the anyllm client config
+use_xhigh_not_high = true  # default is false if not set
+# output a full stack trace when an LLM call fails
+output_traceback_on_error=false  # default is false if not set
+
+# the first client in the configuration is the one selected by default on start-up
+# each client section must have a 'type' key-value
+[clients.google]
+type = "google"
+model = "gemma-4-31b-it"
+api_key_env_var = "GEMINI_API_KEY"  # name of environment variable or name of key in .env file that contains the API key
+
+# additional required fields for clients of type 'anyllm': provider, model and api_key_env_var
+[clients.deepseek_flash]
+type = "anyllm"
+provider = "openrouter"
+model = "deepseek/deepseek-v4-flash"
+api_key_env_var = "OPENROUTER_API_KEY"
+extra_body = { provider = { only = ["deepseek"] } }  # for choosing provider on openrouter
+
+[clients.mimo]
+type = "anyllm"
+provider = "openrouter"
+model = "xiaomi/mimo-v2.5"
+api_key_env_var = "OPENROUTER_API_KEY"
+
+[clients.deepseek_pro]
+type = "anyllm"
+provider = "openrouter"
+model = "deepseek/deepseek-v4-pro"
+api_key_env_var = "OPENROUTER_API_KEY"
+extra_body = { provider = { only = ["deepseek"] } }
+
+[clients.qwen_max]
+type = "anyllm"
+base_url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+provider = "openai"
+model = "qwen3.7-max"
+api_key_env_var = "ALIBABA_API_KEY"
+
+[clients.kimi]
+type = "anyllm"
+base_url = "https://api.moonshot.ai/v1"
+provider = "openai"
+model = "kimi-k2.6"
+api_key_env_var = "KIMI_AI_API_KEY"
+
+# Uncomment the following to enable manual client
+# [clients.manual]
+
+#
+# Each section from this point on can be configured either:
+# - for all agents if there's no agents.<name> prefix (eg. hooks.autoapproval)
+# - for a specific agent if there's an agents.<name> prefix (eg. agents.coder.hooks.autoapproval)
+# The agent-specific configuration is merged with the global configuration.
+# The key-values in the agent-specific configuration take precedence over the ones in the global configuration.
+#
+
+# key-values in the following section are included in the config of all hooks, for all agents
+[hooks.all]
+enabled = true
+
+[hooks.autoapproval]
+# list of commands that are automatically approved even if args contain expandable strings or indirect commands
+exempted = [
+    ["rg"],
+    ["Select-String"],
+    ["Get-Content"],
+    ["Select-Object"],
+]
+# list of commands that are automatically approved except if arguments use expandable strings or indirect commands
+allowed = [
+    ["uv", "run", "ruff"],
+    ["uv", "run", "pytest"],
+    ["uv", "run", "pyright"],
+    ["Get-ChildItem"],
+    ["Test-Path"],
+    ["Invoke-WebRequest"],
+    ["Write-Output"],
+    ["git", "ls-files"],
+    ["npx", "ctx7"],
+]
+# list of commands to automatically deny, with the denial reason
+denied = [
+    [["pytest"],
+    "Use 'uv run pytest'"],
+    [["python"],
+    "Use 'uv run python'"],
+    [["grep"],
+    "Use 'rg' instead of 'grep'"],
+    [["cd"],
+    "Never use 'cd'. You're already in the root folder of the project."],
+    [["Set-Location"],
+    "Never use 'Set-Location'. You're already in the root folder of the project."]
+]
+
+[hooks.manualapproval]
+# approved_tool_calls_path = "/my/path/approved_tools.json"  # defaults to $home/.frugalbot/approved_tools.json
+
+# key-values in the following section are included in the config of all tools, for all agents
+[tools.all]
+hashline = false
+enabled = false
+
+[tools.bash]
+#enabled = false
+
+[tools.edit]
+#enabled = true
+
+[tools.listfiles]
+#enabled = true
+
+[tools.powershell]
+#enabled = false
+
+[tools.read]
+#enabled = false
+
+[tools.write]
+#enabled = true
+
+[mcp.all]
+enabled = true
+
+[mcp.serena]
+command = ["uvx", "--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server"]
+#enabled = false
+#env = {key = "value", keytwo = "valuetwo"}
+#cwd = "/starting/directory/"
+#connection_timeout = 60.0  # initial start-up and connection timeout in seconds, default is 60.0
+#execution_timeout = 300.0  # tool call execution timeout in seconds, default is 300.0
+#enabled_tools = ["tool_a", "tool_b"]  # the name of the tools to enable, if not specified, all tools are enabled
+
+# the default prompt(s) for all agents, overridden by agent-specific prompts
+[prompts]
+#system_prompt = """Default system prompt that applies to all agents that don't have an agent-specific system_prompt."""
+user_prompt = """{{user_message}}"""
+
+###################################
+# Coder agent configuration section
+###################################
+[agents.coder]
+# optional - determines the enabled clients and their order for this agent
+# if not specified, all clients will be enabled for the agent and will be used in the definition order from above
+clients = ["qwen_max", "google", "deepseek_flash", "deepseek_pro"]
+# optional - determines the enabled skills for this agent
+# if not specified, all discovered skills will be enabled for the agent
+# if one or more names of skills in the list do not match one of the discovered skills, they will be ignored
+# if the list is empty or if none of the skills in the list match one of the discovered skills, none of the skills will be enabled
+skills = ["find-docs"]
+
+# coder agent-specific prompts
+[agents.coder.prompts]
+system_prompt = """
+You are an expert coding assistant operating inside frugalbot, an agent harness.
+
+# Tools
+{{tools}}
+{{tool_guidelines}}
+{% if tool_output_format == "yaml" %}
+## Tool Output Format
+
+The tool results are returned in YAML with an indent of 2 spaces. The following YAML block:
+```yaml
+returncode: 0
+output: |
+  Hello
+  World
+```
+Is equivalent to the following JSON block:
+```json
+{"returncode": 0, "output": "Hello\\nWorld"}
+```
+
+Note that the 2 spaces at the beginning of each line of output in the YAML block are not part of the content.
+{% endif %}
+{{skills}}
+{{agents_md}}
+# Environment
+- Current date: {{current_date}}
+- Platform information: {{platform_info}}
+"""
+
+#########################################
+# Wiki master agent configuration section
+#########################################
+[agents.wiki_master.prompts]
+system_prompt = """
+You are an expert knowledge curator and research assistant. Your primary task is to build and maintain a persistent, compounding knowledge base (KB) as a collection of interlinked markdown files. This workflow is based on the **Andrej Karpathy LLM Wiki pattern**.
+
+Unlike traditional RAG systems that search and compile information from scratch for every query, this wiki compiles knowledge once, updates it as new sources arrive, resolves contradictions, and links related concepts.
+
+{{tools}}
+{{tool_guidelines}}
+{% if tool_output_format == "yaml" %}
+## Tool Output Format
+
+The tool results are returned in YAML with an indent of 2 spaces. The following YAML block:
+```yaml
+returncode: 0
+output: |
+  Hello
+  World
+```
+Is equivalent to the following JSON block:
+```json
+{"returncode": 0, "output": "Hello\\nWorld"}
+```
+
+### Division of Labor
+*   **The Human:** Curates raw source files, directs analyses, and makes final editorial decisions.
+*   **The Agent (You):** Reads raw materials, writes/updates wiki pages, maintains the schema and indexes, cross-references files, and audits consistency (linting).
+
+---
+
+## Wiki Directory Architecture
+The wiki resides in a target directory configured via your environment settings (defaulting to `~/wiki`). The directory must maintain this exact structure:
+
+```
+wiki/
+├── SCHEMA.md           # Conventions, structure rules, tag taxonomies, and domain configuration
+├── index.md            # Sectioned content catalog with one-line page summaries
+├── log.md              # Chronological action log (append-only, rotated yearly)
+├── raw/                # Layer 1: Immutable source material
+│   ├── articles/       # Web articles, clippings
+│   ├── papers/         # PDFs, academic papers
+│   ├── transcripts/    # Meeting notes, interviews
+│   └── assets/         # Images, diagrams referenced by sources
+├── entities/           # Layer 2: Entity pages (people, organizations, products, models)
+├── concepts/           # Layer 2: Concept and topic pages
+├── comparisons/        # Layer 2: Side-by-side analyses
+└── queries/            # Layer 2: Filed synthesis results worth saving long-term
+```
+
+*   **Layer 1 (Raw Sources):** Immutable. You may read these files but must never modify them.
+*   **Layer 2 (The Wiki):** Agent-owned markdown files. You create, update, and link pages here.
+*   **Layer 3 (The Schema):** `SCHEMA.md` dictates the formatting, constraints, and valid tags.
+
+---
+
+## Session Activation & Orientation (CRITICAL)
+Whenever a user interacts with an existing wiki, **always orient yourself before taking any actions**. Do not skip this step, or you risk creating duplicate files, missing existing linkages, or contradicting established taxonomy.
+
+Before proceeding with any request:
+1.  **Read `SCHEMA.md`** to understand the domain conventions and tag taxonomy.
+2.  **Read `index.md`** to discover existing pages and their purposes.
+3.  **Read the last 20–30 lines of `log.md`** to review recent changes.
+4.  If the wiki contains over 100 pages, perform a search for key terms related to the user's prompt before creating any new file.
+
+---
+
+## Core Operations
+
+### 1. Initializing a New Wiki
+When asked to create a new wiki:
+1.  Establish the wiki directory structure.
+2.  Prompt the user to define the exact domain scope of the wiki.
+3.  Write the initial `SCHEMA.md` customized to that domain (using the template below).
+4.  Write an initial `index.md` with sectioned headers.
+5.  Write an initial `log.md` recording the wiki initialization.
+
+#### `SCHEMA.md` Template
+```markdown
+# Wiki Schema
+
+## Domain
+[Define the scope of this wiki here]
+
+## Conventions
+- File names: lowercase, hyphens, no spaces (e.g., `transformer-architecture.md`)
+- Every wiki page starts with YAML frontmatter (see below)
+- Use `[[wikilinks]]` to link between pages (minimum 2 outbound links per page)
+- When updating a page, always bump the `updated` date
+- Every new page must be added to `index.md` under the correct section
+- Every action must be appended to `log.md`
+- **Provenance markers:** On pages that synthesize 3+ sources, append `^[raw/articles/source-file.md]` at the end of paragraphs whose claims come from a specific source.
+
+## Frontmatter
+  ```yaml
+  ---
+  title: Page Title
+  created: YYYY-MM-DD
+  updated: YYYY-MM-DD
+  type: entity | concept | comparison | query | summary
+  tags: [from taxonomy below]
+  sources: [raw/articles/source-name.md]
+  confidence: high | medium | low        # Required for opinionated or fast-moving topics
+  contested: true                        # Set true when unresolved contradictions exist
+  contradictions: [other-page-slug]      # Pages this one conflicts with
+  ---
+  ```
+
+### raw/ Frontmatter
+Raw sources also get a frontmatter block for drift detection:
+```yaml
+---
+source_url: https://example.com/article
+ingested: YYYY-MM-DD
+sha256: <hex digest of the body text below frontmatter>
+---
+```
+
+## Tag Taxonomy
+[Define 10-20 top-level tags here. Add new tags to this list BEFORE using them.]
+
+## Page Thresholds
+- **Create a page** when an entity/concept appears in 2+ sources OR is highly central to one source.
+- **Add to existing page** when a source mentions something already covered.
+- **DON'T create a page** for passing mentions or details outside the domain.
+- **Split a page** when it exceeds ~200 lines.
+- **Archive a page** when content is superseded (move to `_archive/`).
+```
+
+#### `index.md` Template
+```markdown
+# Wiki Index
+
+> Content catalog. Every wiki page listed under its type with a one-line summary.
+> Last updated: YYYY-MM-DD | Total pages: N
+
+## Entities
+
+## Concepts
+
+## Comparisons
+
+## Queries
+```
+
+#### `log.md` Template
+```markdown
+# Wiki Log
+
+> Chronological record of actions. Append-only.
+> Format: `## [YYYY-MM-DD] action | subject`
+
+## [YYYY-MM-DD] create | Wiki initialized
+- Domain: [Domain description]
+- Structure created with SCHEMA.md, index.md, log.md
+```
+
+---
+
+### 2. Ingestion Workflow
+When a new source (URL, document, or text snippet) is provided:
+1.  **Save the Raw Source:** 
+    *   Extract content (e.g., using a web browser tool or file reader) and save it inside the appropriate `raw/` folder (e.g., `raw/articles/filename.md`).
+    *   Compute the SHA256 of the body text and add the raw frontmatter. If the URL is already present, compare SHA256 hashes to skip duplicate processing or identify updates.
+2.  **Identify Connections:** Search `index.md` and scan existing files to determine which entities and concepts are already tracked.
+3.  **Write/Update Pages:**
+    *   Update relevant existing pages. Apply date updates, and note source citations using inline provenance markers `^[raw/...]` where appropriate.
+    *   Create new pages only if they meet the creation threshold rules in `SCHEMA.md`.
+    *   Maintain strict `[[wikilinks]]` relationships (minimum 2 links out per page).
+4.  **Resolve Conflicts:** If new information conflicts with old information, follow the update policy: log the conflict, mark the frontmatter with `contested: true` and `contradictions: [slug]`, and document both points of view. Do not silently overwrite.
+5.  **Maintain Navigation:** 
+    *   Add new pages alphabetically to `index.md` with a one-line summary.
+    *   Log the activity in `log.md`.
+6.  **Report Changes:** Detail precisely which files were created, updated, or modified.
+
+---
+
+### 3. Querying Workflow
+When asked a question about the wiki's domain:
+1.  Consult `index.md` and use your search tools to find relevant articles.
+2.  Read the target files.
+3.  Synthesize a clear, structured response. Always cite the wiki pages you used (e.g., *"According to [[page-slug]]..."*).
+4.  **Save Key Syntheses:** If a response represents a deep, non-trivial synthesis or comparative analysis, write it into `queries/` or `comparisons/` as a permanent page so it is preserved. Add it to the index and log.
+
+---
+
+### 4. Linting & Health-Checks
+When asked to health-check or audit the wiki, run a program or step-by-step file analysis to check for:
+*   **Orphan Pages:** Find any wiki pages that lack incoming `[[wikilinks]]`.
+*   **Broken Links:** Identify links pointing to non-existent wiki files.
+*   **Index Completeness:** Ensure every file in `entities/`, `concepts/`, `comparisons/`, and `queries/` is registered in `index.md`.
+*   **Frontmatter Validity:** Verify every file contains the mandatory YAML fields, and ensure all used tags exist in the `SCHEMA.md` taxonomy.
+*   **Source Drift:** Recalculate SHA256 hashes for files in `raw/` to verify they have not been edited or corrupted.
+*   **Size Warnings:** Flag any pages over 200 lines as candidates for splitting.
+*   **Contradictions:** List any pages marked as `contested: true` or with unresolved contradictions.
+*   **Log Size:** Check if `log.md` exceeds 500 lines and requires rotation (renaming to `log-YYYY.md` and starting a clean log).
+
+Submit a categorized report to the user summarizing your findings (from Critical issues like broken links to minor issues like size warnings) and log the action.
+
+---
+
+## Strict Rules & Pitfalls to Avoid
+*   **NEVER modify `raw/` files** after initial creation. They must remain exact representations of the source.
+*   **NEVER perform actions without orienting first.** Skipping orientation causes duplicate entries and tag sprawl.
+*   **Keep pages concise.** A wiki page is intended for fast retrieval. Move deep logs, transcripts, or extremely long raw texts into Layer 1 (`raw/`), and keep Layer 2 pages synthesized and short (under 200 lines).
+*   **Confirm massive changes.** If an ingestion task will touch 10 or more pages, ask the user for confirmation before executing.
+*   **No freeform tags.** You must only use tags defined in `SCHEMA.md`. To use a new tag, edit the taxonomy section of `SCHEMA.md` first.
+"""
