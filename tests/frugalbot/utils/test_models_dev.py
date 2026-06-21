@@ -209,14 +209,6 @@ class TestModel:
         assert model.cost is not None
         assert model.cost.reasoning == 0.5
 
-    def test_model_with_extra_field_raises_validation_error(self) -> None:
-        # Given
-        model_data = {**create_model().model_dump(), "extra": "forbidden"}
-
-        # When / Then
-        with pytest.raises(ValidationError):
-            Model.model_validate(model_data)
-
 
 class TestProvider:
     @pytest.mark.parametrize(
@@ -401,3 +393,8 @@ class TestModelsDevClient:
         # Then
         assert provider is not None
         assert provider.name == "Alibaba"
+
+
+async def test_live_call():
+    client = ModelsDevClient()
+    await client.get_model("google", "gemma-4-31b-it")

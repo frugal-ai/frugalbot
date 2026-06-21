@@ -60,8 +60,6 @@ class ModelProviderInfo(BaseModel):
 
 
 class Model(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     id: str
     name: str = Field(min_length=1)
     family: str | None = None
