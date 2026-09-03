@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,9 @@ from frugalbot.utils.path import check_and_resolve_path
 
 @pytest.fixture(autouse=True)
 def _setup_fs(fs: FakeFilesystem) -> None:
+    if sys.platform != "win32":
+        fs.create_dir("/basefolder")
+        fs.cwd = "/basefolder"
     cwd = Path.cwd()
     fs.create_dir(cwd / "subdir")
     fs.create_file(cwd / "file.txt")
@@ -58,10 +62,21 @@ def test_check_and_resolve_path_with_absolute_path_returns_as_is(fs: FakeFilesys
     assert result == abs_path
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Drive-relative paths are only meaningful on Windows")
 def test_check_and_resolve_path_with_path_outside_cwd_raises_value_error(fs: FakeFilesystem) -> None:
     # Given
     fs.create_dir("D:/outside")
     path = Path("D:/outside")
+
+    # When / Then
+    with pytest.raises(ValueError, match="path must resolve to a child of the current working directory"):
+        check_and_resolve_path(path)
+
+
+def test_check_and_resolve_path_with_path_outside_cwd_on_posix_raises_value_error(fs: FakeFilesystem) -> None:
+    # Given
+    fs.create_dir("/outside")
+    path = Path("/outside")
 
     # When / Then
     with pytest.raises(ValueError, match="path must resolve to a child of the current working directory"):
@@ -213,6 +228,7 @@ def test_check_and_resolve_path_with_nonexistent_parent_directory_raises_value_e
         check_and_resolve_path(path, must_exist=True)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Different-drive paths are only meaningful on Windows")
 def test_check_and_resolve_path_with_path_on_different_drive_raises_value_error(fs: FakeFilesystem) -> None:
     # Given
     fs.create_dir("D:/sibling")

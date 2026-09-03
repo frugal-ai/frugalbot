@@ -2,6 +2,7 @@ import asyncio
 import base64
 import os
 import shutil
+import subprocess
 import sys
 import weakref
 from pathlib import Path
@@ -24,6 +25,19 @@ class PowershellResult(pydantic.BaseModel):
 _powershell_locks = weakref.WeakKeyDictionary()
 
 
+def _translate_path_for_powershell(path: str) -> str:
+    """Translate POSIX paths to Windows paths when running under WSL.
+
+    Under WSL, powershell.exe is a Windows process and cannot interpret POSIX paths
+    such as /tmp/foo. Convert them to their Windows form (e.g. \\\\wsl.localhost\\...) so
+    that file system cmdlets work. On native Windows this is a no-op.
+    """
+    if sys.platform != "linux" or not shutil.which("wslpath"):
+        return path
+    result = subprocess.run(["wslpath", "-w", path], capture_output=True, text=True, check=False)
+    return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else path
+
+
 def _get_powershell_lock() -> asyncio.Lock:
     loop = asyncio.get_running_loop()
     if loop not in _powershell_locks:
@@ -34,12 +48,13 @@ def _get_powershell_lock() -> asyncio.Lock:
 async def _run_powershell(commands: str, timeout_in_seconds: float) -> PowershellResult:
     lock = _get_powershell_lock()
     async with lock:
+        translated_commands = _translate_path_for_powershell(commands)
         wrapper_script = f"""
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $ErrorActionPreference = 'Stop'
         try {{
             $ProgressPreference = 'SilentlyContinue';
-            {commands}
+            {translated_commands}
             if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {{ exit $LASTEXITCODE }}
             if (-not $?) {{ exit 1 }}
         }} catch {{

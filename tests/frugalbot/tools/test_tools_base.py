@@ -1,8 +1,10 @@
-from typing import Annotated
+import sys
+from typing import Annotated, Any
 
 import jsonschema
 import pytest
 
+import frugalbot.tools.bash
 import frugalbot.tools.powershell
 from frugalbot.tools.base import ToolBase, ToolConfig, Tools
 
@@ -118,38 +120,50 @@ def test_validate_args_with_invalid_args_raises_validation_error(tools):
     assert excinfo.type is jsonschema.ValidationError
 
 
+def _get_platform_tool_module() -> Any:
+    """Return the platform-appropriate command tool module for testing registry loading."""
+    if sys.platform == "win32":
+        return frugalbot.tools.powershell
+    return frugalbot.tools.bash
+
+
 def test_load_with_config_populates_registry(tools):
     # Given
-    config = {"powershell": {}}
+    tool_name = _get_platform_tool_module().__name__.split(".")[-1]
+    config = {tool_name: {}}
 
     # When
     tools.load(config)
 
     # Then
-    assert "powershell" in [t.name for t in tools.get_all()]
+    assert tool_name in [t.name for t in tools.get_all()]
 
 
-def test_load_with_config_instantiates_powershell_tool(tools):
+def test_load_with_config_instantiates_platform_tool(tools):
     # Given
-    config = {"powershell": {}}
+    tool_module = _get_platform_tool_module()
+    tool_name = tool_module.__name__.split(".")[-1]
+    config = {tool_name: {}}
 
     # When
     tools.load(config)
 
     # Then
-    assert isinstance(tools.get("powershell"), frugalbot.tools.powershell.Powershell)
+    assert isinstance(tools.get(tool_name), tool_module.__dict__[tool_name.capitalize()])
 
 
 def test_get_with_existing_tool_returns_tool(tools):
     # Given
-    config = {"powershell": {}}
+    tool_module = _get_platform_tool_module()
+    tool_name = tool_module.__name__.split(".")[-1]
+    config = {tool_name: {}}
     tools.load(config)
 
     # When
-    tool = tools.get("powershell")
+    tool = tools.get(tool_name)
 
     # Then
-    assert isinstance(tool, frugalbot.tools.powershell.Powershell)
+    assert isinstance(tool, tool_module.__dict__[tool_name.capitalize()])
 
 
 def test_get_with_missing_tool_raises_key_error(tools):

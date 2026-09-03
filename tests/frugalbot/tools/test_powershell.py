@@ -1,10 +1,17 @@
+import sys
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
 from frugalbot.tools.base import ToolConfig, ToolError
-from frugalbot.tools.powershell import Powershell
+from frugalbot.tools.powershell import Powershell, _translate_path_for_powershell
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Tests in this file require Windows",
+)
 
 
 @pytest.fixture
@@ -214,3 +221,54 @@ def test_name_returns_lowercase_class_name(powershell_tool: Powershell) -> None:
 
     # Then
     assert name == "powershell"
+
+
+# _translate_path_for_powershell() tests
+
+
+def test_translate_path_for_powershell_with_wsltranslates_to_windows_path() -> None:
+    # Given
+    posix_path = "/tmp/test_directory"
+
+    # When
+    result = _translate_path_for_powershell(posix_path)
+
+    # Then
+    assert result.startswith("\\\\")
+
+
+def test_translate_path_for_powershell_with_windows_path_returns_unchanged() -> None:
+    # Given
+    windows_path = "C:\\Users\\test"
+
+    # When
+    result = _translate_path_for_powershell(windows_path)
+
+    # Then
+    assert result == windows_path
+
+
+def test_translate_path_for_powershell_with_command_returns_unchanged_when_wslpath_missing() -> None:
+    # Given
+    command = "Get-ChildItem -Path '/tmp/test'"
+
+    # When
+    with patch("frugalbot.tools.powershell.shutil.which", return_value=None):
+        result = _translate_path_for_powershell(command)
+
+    # Then
+    assert result == command
+
+
+def test_translate_path_for_powershell_with_command_returns_unchanged_when_wslpath_fails() -> None:
+    # Given
+    command = "Get-ChildItem -Path '/tmp/test'"
+
+    # When
+    with patch("frugalbot.tools.powershell.subprocess.run") as run_mock:
+        run_mock.return_value.returncode = 1
+        run_mock.return_value.stdout = ""
+        result = _translate_path_for_powershell(command)
+
+    # Then
+    assert result == command
