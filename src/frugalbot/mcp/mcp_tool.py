@@ -1,7 +1,7 @@
 from typing import Any, ClassVar
 
 import jsonschema
-import mcp
+import mcp.types as types
 
 from frugalbot.events import MessageEvent, MessageMarkup, MessageType, bus
 from frugalbot.mcp.mcp_session import MCPSession
@@ -42,7 +42,7 @@ class MCPTool(ToolBase[MCPToolResult]):
 
     _skip_registry: ClassVar[bool] = True
 
-    def __init__(self, config: ToolConfig, server_name: str, session: MCPSession, tool: mcp.types.Tool):
+    def __init__(self, config: ToolConfig, server_name: str, session: MCPSession, tool: types.Tool):
         super().__init__(config)
         self._server_name = server_name
         self._session = session
@@ -70,7 +70,7 @@ class MCPTool(ToolBase[MCPToolResult]):
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": _clean_schema(self._tool.inputSchema),
+                "parameters": _clean_schema(self._tool.model_dump()),
             },
         }
 
@@ -78,7 +78,7 @@ class MCPTool(ToolBase[MCPToolResult]):
         return []
 
     def validate_args(self, args: dict[str, Any]) -> None:
-        jsonschema.validate(args, self._tool.inputSchema)
+        jsonschema.validate(args, self._tool.input_schema)
 
     async def run(self, *args: Any, **kwargs: dict[str, Any]) -> MCPToolResult:
         """Delegate to MCP server. Accepts *args for signature compatibility with ToolBase."""

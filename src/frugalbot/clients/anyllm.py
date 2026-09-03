@@ -31,28 +31,24 @@ class AnyLLMConfig(LLMClientConfig):
 
 def _convert_any_llm_provider_to_models_dev_provider(provider: LLMProvider) -> str:
     """
-    Converts an LLMProvider enum to a provider ID string from the target list.
+    Converts an LLMProvider enum to a provider ID string from models.dev.
     """
     mapping = {
+        LLMProvider.AZUREANTHROPIC: "azure",
+        LLMProvider.AZUREOPENAI: "azure",
         LLMProvider.BEDROCK: "amazon-bedrock",
+        LLMProvider.DASHSCOPE: "alibaba",
         LLMProvider.FIREWORKS: "fireworks-ai",
         LLMProvider.GEMINI: "google",
         LLMProvider.MOONSHOT: "moonshotai",
-        LLMProvider.MZAI: "302ai",  # Assuming MZAI maps to 302ai based on common naming
+        LLMProvider.MZAI: "302ai",
+        LLMProvider.OLLAMA: "ollama-cloud",
         LLMProvider.QINIU: "qiniu-ai",
         LLMProvider.TOGETHER: "togetherai",
         LLMProvider.VERTEXAI: "google-vertex",
         LLMProvider.VERTEXAIANTHROPIC: "google-vertex-anthropic",
-        LLMProvider.AZUREANTHROPIC: "azure",
-        LLMProvider.AZUREOPENAI: "azure",
-        LLMProvider.DASHSCOPE: "alibaba",
-        LLMProvider.GATEWAY: "cloudflare-ai-gateway",
-        LLMProvider.OLLAMA: "ollama-cloud",
     }
-    if provider in mapping:
-        return mapping[provider]
-    # others that don't have a mapping are an exact match
-    return provider.value
+    return mapping.get(provider, provider.value)
 
 
 async def _log_retry(retry_state: RetryCallState):
