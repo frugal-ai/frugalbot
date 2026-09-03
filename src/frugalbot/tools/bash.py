@@ -8,7 +8,7 @@ from typing import Annotated
 import psutil
 import pydantic
 
-from frugalbot.events import MessageEvent, MessageType, bus
+from frugalbot.events import MessageEvent, MessageMarkup, MessageType, bus
 from frugalbot.tools.base import ToolBase, ToolConfig, ToolError
 from frugalbot.utils.process import read_stdout_and_stream_output_as_events
 
@@ -41,7 +41,9 @@ async def _run_bash(commands: str, timeout_in_seconds: int) -> BashResult:
     )
 
     try:
+        await bus.emit_and_handle(MessageEvent(f"```bash\n{commands}\n```\n```\n", MessageType.TOOL_OUTPUT, MessageMarkup.MARKDOWN, is_stream=True))
         _, captured_output = await asyncio.wait_for(asyncio.gather(proc.wait(), read_stdout_and_stream_output_as_events(proc)), timeout=timeout_in_seconds)
+        await bus.emit_and_handle(MessageEvent("\n```\n", MessageType.TOOL_OUTPUT, MessageMarkup.MARKDOWN, is_stream=True))
     except TimeoutError:
         try:
             parent = psutil.Process(proc.pid)
