@@ -73,6 +73,7 @@ def test_check_and_resolve_path_with_path_outside_cwd_raises_value_error(fs: Fak
         check_and_resolve_path(path)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="posix-specific test")
 def test_check_and_resolve_path_with_path_outside_cwd_on_posix_raises_value_error(fs: FakeFilesystem) -> None:
     # Given
     fs.create_dir("/outside")

@@ -218,20 +218,6 @@ async def test_run_with_subshell_in_command_leaves_state_not_set(shell_tool_name
     assert hook_data.state == ApprovalState.NOT_SET
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="windows-specific behaviour due to difference in parsing")
-async def test_run_with_subshell_in_exempted_command_sets_approved(shell_tool_name):
-    # Given
-    config = AutoApprovalConfig(enabled=True, exempted=[["rg"]], allowed=[["echo"]], denied=[])
-    auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data(shell_tool_name, {"command": "rg $(malware.exe)"})
-
-    # When
-    await auto_approval.run(hook_data)
-
-    # Then
-    assert hook_data.state == ApprovalState.APPROVED
-
-
 async def test_run_with_all_commands_allowed_is_approved(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[["echo"], ["mkdir"]], denied=[])

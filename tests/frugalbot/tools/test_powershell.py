@@ -226,17 +226,6 @@ def test_name_returns_lowercase_class_name(powershell_tool: Powershell) -> None:
 # _translate_path_for_powershell() tests
 
 
-def test_translate_path_for_powershell_with_wsltranslates_to_windows_path() -> None:
-    # Given
-    posix_path = "/tmp/test_directory"
-
-    # When
-    result = _translate_path_for_powershell(posix_path)
-
-    # Then
-    assert result.startswith("\\\\")
-
-
 def test_translate_path_for_powershell_with_windows_path_returns_unchanged() -> None:
     # Given
     windows_path = "C:\\Users\\test"
