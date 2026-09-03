@@ -1,143 +1,108 @@
-import asyncio
-import base64
+from __future__ import annotations
 
-import orjson as json
-
-from frugalbot.hooks.base import ApprovalState, HookBase, HookConfig, HookError, PreToolCallHook
+from frugalbot.hooks.auto_approval_bash import split_bash_commands
+from frugalbot.hooks.auto_approval_powershell import split_powershell_commands
+from frugalbot.hooks.base import (
+    ApprovalState,
+    HookBase,
+    HookConfig,
+    HookError,
+    PreToolCallHook,
+)
 
 
 class AutoApprovalConfig(HookConfig):
-    exempted: list[list[str]]  # list of commands automatically approved regardless of usage of expandable strings
+    # Command prefixes approved even if their command contains a shell
+    # expansion, redirection, assignment, or other sensitive shell syntax.
+    # Keep this list extremely narrow.
+    exempted: list[list[str]]
+
+    # Command prefixes that may be auto-approved only when no MUST_APPROVE
+    # marker is present.
     allowed: list[list[str]]
-    denied: list[tuple[list[str], str]]  # tuple of command words and denied reason
+
+    # (command-prefix, denial reason)
+    denied: list[tuple[list[str], str]]
 
 
-def _make_ps_script(cmd_string: str, exempt_commands: list[list[str]]) -> str:
-    # Build the .NET List of string arrays to prevent PowerShell from unrolling/flattening single-item lists
-    exempt_init_lines = ["$exempt_patterns = [System.Collections.Generic.List[string[]]]::new()"]
-    for pattern in exempt_commands:
-        escaped_items = ", ".join(f"'{cmd.replace("'", "''")}'" for cmd in pattern)
-        exempt_init_lines.append(f"$exempt_patterns.Add([string[]]@({escaped_items}))")
-
-    exempt_patterns_ps = "\n".join(exempt_init_lines)
-    b64 = base64.b64encode(cmd_string.encode("utf-16-le")).decode("ascii")
-
-    return f"""
-$cmd = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String('{b64}'))
-$tokens = $null; $errors = $null
-[System.Management.Automation.Language.Parser]::ParseInput($cmd, [ref]$tokens, [ref]$errors) | Out-Null
-
-{exempt_patterns_ps}
-
-$all = [System.Collections.Generic.List[object]]::new()
-$cur = [System.Collections.Generic.List[string]]::new()
-
-foreach ($tok in $tokens) {{
-    if ($tok.Kind -in @('NewLine','EndOfInput')) {{
-        if ($cur.Count -gt 0) {{ $all.Add($cur.ToArray()); $cur = [System.Collections.Generic.List[string]]::new() }}
-        continue
-    }}
-    if ($tok.Kind -in @('Semi','AndAnd','OrOr','Ampersand','Pipe')) {{
-        if ($cur.Count -gt 0) {{ $all.Add($cur.ToArray()); $cur = [System.Collections.Generic.List[string]]::new() }}
-    }} elseif ($tok.Kind -in @('DollarParen','AtParen','LCurly','StringExpandable','HereStringExpandable')) {{
-        
-        # Check if the parsed tokens in $cur start with any of the exempt patterns
-        $is_exempt = $false
-        if ($cur.Count -gt 0) {{
-            foreach ($pattern in $exempt_patterns) {{
-                if ($cur.Count -ge $pattern.Length) {{
-                    $matches = $true
-                    for ($i = 0; $i -lt $pattern.Length; $i++) {{
-                        if ($cur[$i] -ne $pattern[$i]) {{
-                            $matches = $false
-                            break
-                        }}
-                    }}
-                    if ($matches) {{
-                        $is_exempt = $true
-                        break
-                    }}
-                }}
-            }}
-        }}
-
-        if ($is_exempt) {{
-            $cur.Add($tok.Text)
-        }} else {{
-            if ($cur.Count -gt 0) {{ $all.Add($cur.ToArray()); $cur = [System.Collections.Generic.List[string]]::new() }}
-            $cur.Add('MUST_APPROVE')
-            $cur.Add($tok.Text)
-        }}
-    }} else {{
-        $cur.Add($tok.Text)
-    }}
-}}
-if ($cur.Count -gt 0) {{ $all.Add($cur.ToArray()) }}
-ConvertTo-Json -InputObject $all -Compress
-"""
+_SHELL_TOOLS = frozenset({"powershell", "bash"})
 
 
-async def _split_powershell_commands(cmd_string: str, exempt_commands: list[list[str]]) -> list[list[str]]:
-    proc = await asyncio.create_subprocess_exec(
-        "powershell.exe",
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        _make_ps_script(cmd_string, exempt_commands),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+def _is_match(pattern: list[str], command: list[str]) -> bool:
+    """Return True if pattern matches the leading tokens of command."""
+    return len(command) >= len(pattern) and all(
+        expected == "DONTCARE" or expected == actual
+        for expected, actual in zip(
+            pattern,
+            command[: len(pattern)],
+            strict=True,
+        )
     )
-    stdout, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise HookError(f"pwsh failed (exit {proc.returncode}): {stderr.decode()}")
-
-    return json.loads(stdout.decode().strip())
 
 
-def _is_match(a: list[str], b: list[str]):
-    """Returns true if all elements of list a match the first len(a) elements of list b."""
-    return len(b) >= len(a) and all(a == "DONTCARE" or a == b for a, b in zip(a, b[: len(a)], strict=True))
+async def _split_shell_commands(
+    tool_name: str,
+    cmd_string: str,
+    exempt_commands: list[list[str]],
+) -> list[list[str]]:
+    if tool_name == "powershell":
+        return await split_powershell_commands(cmd_string, exempt_commands)
+
+    if tool_name == "bash":
+        return await split_bash_commands(cmd_string, exempt_commands)
+
+    raise HookError(f"Unsupported shell tool: {tool_name}")
 
 
 class AutoApprovalHook(HookBase[PreToolCallHook, AutoApprovalConfig]):
     async def run(self, hook_data) -> None:
         if hook_data.state in (ApprovalState.APPROVED, ApprovalState.DENIED):
             return
+
         args = hook_data.arguments
-        if hook_data.tool_name == "listfiles":
+        tool_name = hook_data.tool_name
+
+        if tool_name == "listfiles":
             hook_data.state = ApprovalState.APPROVED
-        if "path" in args and isinstance(args["path"], str):
+            return
+
+        if "path" in args and isinstance(args.get("path"), str):
             path = args["path"].lstrip()
-            if not path.startswith("/") and not path.startswith("\\"):
-                hook_data.state = ApprovalState.APPROVED
-            else:
+
+            if path.startswith(("/", "\\")):
                 hook_data.state = ApprovalState.DENIED
                 hook_data.denied_reason = "Absolute paths are not allowed"
-        elif hook_data.tool_name == "powershell" and "command" in args and isinstance(args["command"], str):
-            commands = await _split_powershell_commands(args["command"], self.config.exempted)
-            all_approved = True
-
-            for command in commands:
-                for denied, reason in self.config.denied:
-                    if _is_match(denied, command):
-                        hook_data.state = ApprovalState.DENIED
-                        hook_data.denied_reason = reason
-                        return
-
-                approved = False
-                allowed_lists = [self.config.allowed, self.config.exempted]
-                for allowed_list in allowed_lists:
-                    for allowed in allowed_list:
-                        if _is_match(allowed, command):
-                            approved = True
-                            break
-                    if approved:
-                        break
-
-                if not approved:
-                    all_approved = False
-                    break
-
-            if all_approved:
+            else:
                 hook_data.state = ApprovalState.APPROVED
+
+            return
+
+        if tool_name not in _SHELL_TOOLS or not isinstance(args.get("command"), str):
+            return
+
+        commands = await _split_shell_commands(
+            tool_name,
+            args["command"],
+            self.config.exempted,
+        )
+
+        # Denials always win, including for a nested command substitution.
+        for command in commands:
+            for denied_pattern, reason in self.config.denied:
+                if _is_match(denied_pattern, command):
+                    hook_data.state = ApprovalState.DENIED
+                    hook_data.denied_reason = reason
+                    return
+
+            approved = False
+
+        # A tool call is auto-approved only if every parsed command is allowed
+        # or exempt. A leading MUST_APPROVE marker prevents normal prefix rules
+        # from matching; only pre-marker exemption evaluation can waive it.
+        for command in commands:
+            approved = any(_is_match(pattern, command) for rules in (self.config.allowed, self.config.exempted) for pattern in rules)
+
+            if not approved:
+                return
+
+        hook_data.state = ApprovalState.APPROVED

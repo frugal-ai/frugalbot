@@ -1,4 +1,7 @@
+import sys
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from frugalbot.hooks.auto_approval import AutoApprovalConfig, AutoApprovalHook, _is_match
 from frugalbot.hooks.base import ApprovalState, PreToolCallHook
@@ -80,12 +83,17 @@ def _make_hook_data(tool_name: str, arguments: dict[str, str]) -> PreToolCallHoo
     return PreToolCallHook(tool_name=tool_name, arguments=arguments)
 
 
-async def test_run_with_already_approved_state_leaves_state_approved():
+@pytest.fixture
+def shell_tool_name() -> str:
+    return "powershell" if sys.platform == "win32" else "bash"
+
+
+async def test_run_with_already_approved_state_leaves_state_approved(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[], denied=[])
     auto_approval = AutoApprovalHook(config)
     hook_data = PreToolCallHook(
-        tool_name="powershell",
+        tool_name=shell_tool_name,
         arguments={"command": "echo hello"},
         state=ApprovalState.APPROVED,
     )
@@ -97,12 +105,12 @@ async def test_run_with_already_approved_state_leaves_state_approved():
     assert hook_data.state == ApprovalState.APPROVED
 
 
-async def test_run_with_already_denied_state_leaves_state_denied():
+async def test_run_with_already_denied_state_leaves_state_denied(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[["echo"]], denied=[])
     auto_approval = AutoApprovalHook(config)
     hook_data = PreToolCallHook(
-        tool_name="powershell",
+        tool_name=shell_tool_name,
         arguments={"command": "echo hello"},
         state=ApprovalState.DENIED,
     )
@@ -179,11 +187,16 @@ async def test_run_with_unix_absolute_path_sets_denied_reason():
     assert hook_data.denied_reason == "Absolute paths are not allowed"
 
 
-async def test_run_with_windows_absolute_path_is_denied():
+@pytest.fixture
+def absolute_path() -> str:
+    return "\\Users\\admin\\file.txt" if sys.platform == "win32" else "/etc/sudo.conf"
+
+
+async def test_run_with_windows_absolute_path_is_denied(absolute_path):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[], denied=[])
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("edit", {"path": "\\Users\\admin\\file.txt"})
+    hook_data = _make_hook_data("edit", {"path": absolute_path})
 
     # When
     await auto_approval.run(hook_data)
@@ -192,11 +205,11 @@ async def test_run_with_windows_absolute_path_is_denied():
     assert hook_data.state == ApprovalState.DENIED
 
 
-async def test_run_with_subshell_in_command_leaves_state_not_set():
+async def test_run_with_subshell_in_command_leaves_state_not_set(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[["echo"]], denied=[])
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "echo $(malware.exe)"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "echo $(malware.exe)"})
 
     # When
     await auto_approval.run(hook_data)
@@ -205,11 +218,12 @@ async def test_run_with_subshell_in_command_leaves_state_not_set():
     assert hook_data.state == ApprovalState.NOT_SET
 
 
-async def test_run_with_subshell_in_exempted_command_leaves_is_approved():
+@pytest.mark.skipif(sys.platform != "win32", reason="windows-specific behaviour due to difference in parsing")
+async def test_run_with_subshell_in_exempted_command_sets_approved(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[["rg"]], allowed=[["echo"]], denied=[])
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "rg $(malware.exe)"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "rg $(malware.exe)"})
 
     # When
     await auto_approval.run(hook_data)
@@ -218,14 +232,14 @@ async def test_run_with_subshell_in_exempted_command_leaves_is_approved():
     assert hook_data.state == ApprovalState.APPROVED
 
 
-async def test_run_with_all_commands_allowed_is_approved():
+async def test_run_with_all_commands_allowed_is_approved(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[["echo"], ["mkdir"]], denied=[])
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "echo hello; mkdir plans"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "echo hello; mkdir plans"})
 
     # When
-    with patch("frugalbot.hooks.auto_approval._split_powershell_commands", new_callable=AsyncMock) as mock_split:
+    with patch("frugalbot.hooks.auto_approval._split_shell_commands", new_callable=AsyncMock) as mock_split:
         mock_split.return_value = [["echo", "hello"], ["mkdir", "plans"]]
         await auto_approval.run(hook_data)
 
@@ -233,14 +247,14 @@ async def test_run_with_all_commands_allowed_is_approved():
     assert hook_data.state == ApprovalState.APPROVED
 
 
-async def test_run_with_all_commands_exempted_is_approved():
+async def test_run_with_all_commands_exempted_is_approved(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[["echo"], ["mkdir"]], allowed=[], denied=[])
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "echo hello; mkdir plans"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "echo hello; mkdir plans"})
 
     # When
-    with patch("frugalbot.hooks.auto_approval._split_powershell_commands", new_callable=AsyncMock) as mock_split:
+    with patch("frugalbot.hooks.auto_approval._split_shell_commands", new_callable=AsyncMock) as mock_split:
         mock_split.return_value = [["echo", "hello"], ["mkdir", "plans"]]
         await auto_approval.run(hook_data)
 
@@ -248,7 +262,7 @@ async def test_run_with_all_commands_exempted_is_approved():
     assert hook_data.state == ApprovalState.APPROVED
 
 
-async def test_run_with_denied_command_is_denied():
+async def test_run_with_denied_command_is_denied(shell_tool_name):
     # Given
     config = AutoApprovalConfig(
         enabled=True,
@@ -257,10 +271,10 @@ async def test_run_with_denied_command_is_denied():
         denied=[(["Remove-Item", "-Recurse"], "Recursive deletion is not allowed")],
     )
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "Remove-Item -Recurse C:\\temp"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "Remove-Item -Recurse C:\\temp"})
 
     # When
-    with patch("frugalbot.hooks.auto_approval._split_powershell_commands", new_callable=AsyncMock) as mock_split:
+    with patch("frugalbot.hooks.auto_approval._split_shell_commands", new_callable=AsyncMock) as mock_split:
         mock_split.return_value = [["Remove-Item", "-Recurse", "C:\\temp"]]
         await auto_approval.run(hook_data)
 
@@ -268,7 +282,7 @@ async def test_run_with_denied_command_is_denied():
     assert hook_data.state == ApprovalState.DENIED
 
 
-async def test_run_with_denied_command_sets_denied_reason():
+async def test_run_with_denied_command_sets_denied_reason(shell_tool_name):
     # Given
     config = AutoApprovalConfig(
         enabled=True,
@@ -277,10 +291,10 @@ async def test_run_with_denied_command_sets_denied_reason():
         denied=[(["Remove-Item", "-Recurse"], "Recursive deletion is not allowed")],
     )
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "Remove-Item -Recurse C:\\temp"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "Remove-Item -Recurse C:\\temp"})
 
     # When
-    with patch("frugalbot.hooks.auto_approval._split_powershell_commands", new_callable=AsyncMock) as mock_split:
+    with patch("frugalbot.hooks.auto_approval._split_shell_commands", new_callable=AsyncMock) as mock_split:
         mock_split.return_value = [["Remove-Item", "-Recurse", "C:\\temp"]]
         await auto_approval.run(hook_data)
 
@@ -288,14 +302,14 @@ async def test_run_with_denied_command_sets_denied_reason():
     assert hook_data.denied_reason == "Recursive deletion is not allowed"
 
 
-async def test_run_with_command_not_in_allowed_list_leaves_state_not_set():
+async def test_run_with_command_not_in_allowed_list_leaves_state_not_set(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[["echo"]], denied=[])
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "mkdir plans"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "mkdir plans"})
 
     # When
-    with patch("frugalbot.hooks.auto_approval._split_powershell_commands", new_callable=AsyncMock) as mock_split:
+    with patch("frugalbot.hooks.auto_approval._split_shell_commands", new_callable=AsyncMock) as mock_split:
         mock_split.return_value = [["mkdir", "plans"]]
         await auto_approval.run(hook_data)
 
@@ -303,14 +317,14 @@ async def test_run_with_command_not_in_allowed_list_leaves_state_not_set():
     assert hook_data.state == ApprovalState.NOT_SET
 
 
-async def test_run_with_partial_command_match_is_approved():
+async def test_run_with_partial_command_match_is_approved(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[["Get-Content"]], denied=[])
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "Get-Content file.txt"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "Get-Content file.txt"})
 
     # When
-    with patch("frugalbot.hooks.auto_approval._split_powershell_commands", new_callable=AsyncMock) as mock_split:
+    with patch("frugalbot.hooks.auto_approval._split_shell_commands", new_callable=AsyncMock) as mock_split:
         mock_split.return_value = [["Get-Content", "file.txt"]]
         await auto_approval.run(hook_data)
 
@@ -318,14 +332,14 @@ async def test_run_with_partial_command_match_is_approved():
     assert hook_data.state == ApprovalState.APPROVED
 
 
-async def test_run_with_dontcare_in_allowed_list_approves_any_argument():
+async def test_run_with_dontcare_in_allowed_list_approves_any_argument(shell_tool_name):
     # Given
     config = AutoApprovalConfig(enabled=True, exempted=[], allowed=[["Get-Content", "DONTCARE"]], denied=[])
     auto_approval = AutoApprovalHook(config)
-    hook_data = _make_hook_data("powershell", {"command": "Get-Content any_file.txt"})
+    hook_data = _make_hook_data(shell_tool_name, {"command": "Get-Content any_file.txt"})
 
     # When
-    with patch("frugalbot.hooks.auto_approval._split_powershell_commands", new_callable=AsyncMock) as mock_split:
+    with patch("frugalbot.hooks.auto_approval._split_shell_commands", new_callable=AsyncMock) as mock_split:
         mock_split.return_value = [["Get-Content", "any_file.txt"]]
         await auto_approval.run(hook_data)
 

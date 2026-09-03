@@ -26,6 +26,8 @@ dependencies = [
     "textual>=8.2.4",
     "textual-dev>=1.8.0",
     "tomli-w>=1.2.0",
+    "tree-sitter>=0.26.0",
+    "tree-sitter-bash>=0.25.1",
     "typer>=0.24.1",
 ]
 
