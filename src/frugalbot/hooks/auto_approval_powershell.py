@@ -31,11 +31,11 @@ $cmd = [System.Text.Encoding]::Unicode.GetString(
 
 $tokens = $null
 $errors = $null
-[System.Management.Automation.Language.Parser]::ParseInput(
+$ast = [System.Management.Automation.Language.Parser]::ParseInput(
     $cmd,
     [ref]$tokens,
     [ref]$errors
-) | Out-Null
+)
 
 if ($errors.Count -gt 0) {{
     $errors | ForEach-Object {{ Write-Error $_.Message }}
@@ -44,80 +44,69 @@ if ($errors.Count -gt 0) {{
 
 {exempt_patterns_ps}
 
+function Test-Exempt($cmdTokens) {{
+    if ($cmdTokens.Count -eq 0 -or $exempt_patterns.Count -eq 0) {{
+        return $false
+    }}
+    foreach ($pattern in $exempt_patterns) {{
+        if ($cmdTokens.Count -lt $pattern.Length) {{ continue }}
+        $matches = $true
+        for ($i = 0; $i -lt $pattern.Length; $i++) {{
+            if ($cmdTokens[$i] -ne $pattern[$i]) {{
+                $matches = $false
+                break
+            }}
+        }}
+        if ($matches) {{ return $true }}
+    }}
+    return $false
+}}
+
+$commands = $ast.FindAll({{
+    param($node)
+    $node -is [System.Management.Automation.Language.CommandAst]
+}}, $true)
+
 $all = [System.Collections.Generic.List[object]]::new()
-$cur = [System.Collections.Generic.List[string]]::new()
 
-foreach ($tok in $tokens) {{
-    if ($tok.Kind -in @('NewLine', 'EndOfInput')) {{
-        if ($cur.Count -gt 0) {{
-            $all.Add($cur.ToArray())
-            $cur = [System.Collections.Generic.List[string]]::new()
+foreach ($command in $commands) {{
+    $cur = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($el in $command.CommandElements) {{
+        # 1. Skip subexpressions / parens whose inner commands are already picked up by FindAll
+        if ($el -is [System.Management.Automation.Language.SubExpressionAst] -or
+            $el -is [System.Management.Automation.Language.ParenExpressionAst] -or
+            $el -is [System.Management.Automation.Language.ArrayExpressionAst]) {{
+            continue
         }}
-        continue
-    }}
 
-    if ($tok.Kind -in @('Semi', 'AndAnd', 'OrOr', 'Ampersand', 'Pipe')) {{
-        if ($cur.Count -gt 0) {{
-            $all.Add($cur.ToArray())
-            $cur = [System.Collections.Generic.List[string]]::new()
-        }}
-        continue
-    }}
-
-    if ($tok.Kind -in @(
-        'DollarParen',
-        'AtParen',
-        'LCurly',
-        'StringExpandable',
-        'HereStringExpandable'
-    )) {{
-        $is_exempt = $false
-
-        if ($cur.Count -gt 0) {{
-            foreach ($pattern in $exempt_patterns) {{
-                if ($cur.Count -lt $pattern.Length) {{
-                    continue
+        # 2. Tag non-exempt expandable strings or script blocks with MUST_APPROVE
+        if ($el -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -or
+            $el -is [System.Management.Automation.Language.ScriptBlockExpressionAst]) {{
+            if (-not (Test-Exempt $cur)) {{
+                if ($cur.Count -gt 0) {{
+                    $all.Add($cur.ToArray())
+                    $cur = [System.Collections.Generic.List[string]]::new()
                 }}
-
-                $matches = $true
-                for ($i = 0; $i -lt $pattern.Length; $i++) {{
-                    if ($cur[$i] -ne $pattern[$i]) {{
-                        $matches = $false
-                        break
-                    }}
-                }}
-
-                if ($matches) {{
-                    $is_exempt = $true
-                    break
-                }}
+                $cur.Add('MUST_APPROVE')
+                $cur.Add($el.Extent.Text)
+                continue
             }}
         }}
 
-        if ($is_exempt) {{
-            $cur.Add($tok.Text)
-        }} else {{
-            if ($cur.Count -gt 0) {{
-                $all.Add($cur.ToArray())
-                $cur = [System.Collections.Generic.List[string]]::new()
-            }}
-
-            # MUST_APPROVE is token zero so prefix allow rules cannot match it.
-            $cur.Add('MUST_APPROVE')
-            $cur.Add($tok.Text)
-        }}
-
-        continue
+        $cur.Add($el.Extent.Text)
     }}
 
-    $cur.Add($tok.Text)
+    if ($cur.Count -gt 0) {{
+        $all.Add($cur.ToArray())
+    }}
 }}
 
-if ($cur.Count -gt 0) {{
-    $all.Add($cur.ToArray())
+if ($all.Count -eq 0) {{
+    "[]"
+}} else {{
+    ConvertTo-Json -InputObject $all -Compress
 }}
-
-ConvertTo-Json -InputObject $all -Compress
 """
 
 
