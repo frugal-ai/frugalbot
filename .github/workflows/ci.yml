@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       # Install clipboard and virtual display utilities on Ubuntu only
       - name: Install Linux clipboard dependencies
@@ -28,7 +28,7 @@ jobs:
           sudo apt-get install -y xclip xvfb
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
 
