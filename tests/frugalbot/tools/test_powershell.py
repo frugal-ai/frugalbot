@@ -55,6 +55,7 @@ async def test_run_with_list_directory_command_returns_file_info(powershell_tool
         "Get-Content does/not/exist/__init__.py",
         "Get-Process | Select-Object -First 1 -Property Id",
         "Get-Content {path} -Encoding utf8 | Select-Object -First 30 | ForEach-Object {{ Write-Output \\\"'$_'\\\" }}",
+        "uv run pytest tests/frugalbot/test_nothing.py 2>&1 | Select-Object -Last 40",
     ],
 )
 async def test_run_with_various_commands_does_not_output_xml(powershell_tool: Powershell, command: str, populated_directory: Path) -> None:

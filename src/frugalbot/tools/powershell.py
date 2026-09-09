@@ -126,6 +126,7 @@ class Powershell(ToolBase[PowershellResult]):
             "Use powershell commands only (eg. use 'Invoke-WebRequest' not 'curl' or 'wget').",
             "Ensure correct command separators: Use ; when chaining commands.",
             "Never use 'Write-Host'. Use 'Write-Output' instead.",
+            "Never redirect stderr to stdout (avoid '2>&1'). Both stdout and stderr are captured automatically by the runner.",
         ])
         return guidelines
 
