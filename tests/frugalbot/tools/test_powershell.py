@@ -1,17 +1,37 @@
+import asyncio
 import sys
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from frugalbot.tools.base import ToolConfig, ToolError
-from frugalbot.tools.powershell import Powershell, _translate_path_for_powershell
+from frugalbot.tools.powershell import Powershell, _run_powershell, _translate_path_for_powershell
 
 pytestmark = pytest.mark.skipif(
     sys.platform != "win32",
     reason="Tests in this file require Windows",
 )
+
+
+@pytest.fixture()
+def mock_bus() -> Generator[MagicMock]:
+    with patch("frugalbot.tools.powershell.bus") as mock:
+        mock.emit_and_handle = AsyncMock()
+        yield mock
+
+
+def _make_process(returncode: int = 0) -> MagicMock:
+    reader = asyncio.StreamReader()
+    reader.feed_eof()
+    proc = MagicMock()
+    proc.wait = AsyncMock(return_value=returncode)
+    proc.returncode = returncode
+    proc.pid = 1234
+    proc.stdout = reader
+    return proc
 
 
 @pytest.fixture
@@ -99,6 +119,28 @@ async def test_run_with_sleep_command_raises_tool_error_on_timeout(powershell_to
     # When / Then
     with pytest.raises(ToolError, match=r"timed out after 0\.1 seconds"):
         await powershell_tool.run(command, timeout_in_seconds=timeout)
+
+
+# _run_powershell() environment tests
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("CI", "true"),
+        ("NO_COLOR", "1"),
+        ("TERM", "dumb"),
+    ],
+)
+async def test_run_powershell_with_any_command_defines_env_var_for_subprocess(mock_bus: MagicMock, name: str, value: str) -> None:
+    # Given
+    proc = _make_process()
+    with patch("frugalbot.tools.powershell.asyncio.create_subprocess_exec", return_value=proc) as create_process:
+        # When
+        await _run_powershell("Write-Output 'Hello World'", 5)
+
+    # Then
+    assert create_process.call_args.kwargs["env"][name] == value
 
 
 # get_schema() tests

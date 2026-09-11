@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import os
 import shutil
 import subprocess
 import sys
@@ -13,7 +12,7 @@ import pydantic
 
 from frugalbot.events import MessageEvent, MessageMarkup, MessageType, bus
 from frugalbot.tools.base import ToolBase, ToolConfig, ToolError
-from frugalbot.utils.process import read_stdout_and_stream_output_as_events
+from frugalbot.utils.process import build_child_process_env, read_stdout_and_stream_output_as_events
 
 
 class PowershellResult(pydantic.BaseModel):
@@ -63,8 +62,7 @@ async def _run_powershell(commands: str, timeout_in_seconds: float) -> Powershel
         }}
         """
 
-        child_env = os.environ.copy()
-        child_env.pop("VIRTUAL_ENV", None)
+        child_env = build_child_process_env()
 
         proc = await asyncio.create_subprocess_exec(
             "powershell.exe",

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from frugalbot.events import MessageEvent, MessageMarkup, MessageType
-from frugalbot.utils.process import read_stdout_and_stream_output_as_events
+from frugalbot.utils.process import build_child_process_env, read_stdout_and_stream_output_as_events
 
 
 @pytest.fixture()
@@ -159,3 +159,66 @@ async def test_read_stdout_with_multiline_output_preserves_newlines(mock_bus: Ma
 
     # Then
     assert result == "line1\nline2\nline3\n"
+
+
+# build_child_process_env() tests
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("CI", "true"),
+        ("NO_COLOR", "1"),
+        ("TERM", "dumb"),
+    ],
+)
+def test_build_child_process_env_with_existing_variable_overrides_it(monkeypatch: pytest.MonkeyPatch, name: str, value: str) -> None:
+    # Given
+    monkeypatch.setenv(name, "previous-value")
+
+    # When
+    result = build_child_process_env()
+
+    # Then
+    assert result[name] == value
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("CI", "true"),
+        ("NO_COLOR", "1"),
+        ("TERM", "dumb"),
+    ],
+)
+def test_build_child_process_env_with_missing_variable_defines_it(monkeypatch: pytest.MonkeyPatch, name: str, value: str) -> None:
+    # Given
+    monkeypatch.delenv(name, raising=False)
+
+    # When
+    result = build_child_process_env()
+
+    # Then
+    assert result[name] == value
+
+
+def test_build_child_process_env_with_virtual_env_removes_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Given
+    monkeypatch.setenv("VIRTUAL_ENV", "/some/virtual/environment")
+
+    # When
+    result = build_child_process_env()
+
+    # Then
+    assert "VIRTUAL_ENV" not in result
+
+
+def test_build_child_process_env_with_unrelated_variable_preserves_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Given
+    monkeypatch.setenv("FRUGALBOT_CUSTOM_VARIABLE", "custom-value")
+
+    # When
+    result = build_child_process_env()
+
+    # Then
+    assert result["FRUGALBOT_CUSTOM_VARIABLE"] == "custom-value"

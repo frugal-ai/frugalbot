@@ -1,5 +1,4 @@
 import asyncio
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -10,7 +9,7 @@ import pydantic
 
 from frugalbot.events import MessageEvent, MessageMarkup, MessageType, bus
 from frugalbot.tools.base import ToolBase, ToolConfig, ToolError
-from frugalbot.utils.process import read_stdout_and_stream_output_as_events
+from frugalbot.utils.process import build_child_process_env, read_stdout_and_stream_output_as_events
 
 
 class BashResult(pydantic.BaseModel):
@@ -26,8 +25,7 @@ async def _run_bash(commands: str, timeout_in_seconds: int) -> BashResult:
     {commands}
     """
 
-    child_env = os.environ.copy()
-    child_env.pop("VIRTUAL_ENV", None)
+    child_env = build_child_process_env()
 
     proc = await asyncio.create_subprocess_exec(
         "bash",
