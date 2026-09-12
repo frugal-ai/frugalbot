@@ -148,7 +148,7 @@ class GoogleClient(LLMClient[GoogleClientConfig]):
         contents, system_instruction = _convert_messages_with_fixes(conversation)
         config: dict[str, Any] = {
             "system_instruction": system_instruction,
-            "tools": _convert_tool_spec([tool.get_schema() for tool in tools.get_all()]),
+            "tools": _convert_tool_spec([tool.get_schema() for tool in tools.get_all()], self.provider),
             "automatic_function_calling": {"disable": True},
         }
         if self.thinking_level != "NONE":

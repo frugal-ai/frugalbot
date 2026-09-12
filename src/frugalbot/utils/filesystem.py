@@ -40,6 +40,6 @@ def list_files(
     return files
 
 
-@cachier.cachier(stale_after=timedelta(seconds=5), next_time=True, backend="memory")
+@cachier.cachier(stale_after=timedelta(seconds=5), next_time=False, backend="memory")
 def list_files_with_cache(paths: Path | list[Path]) -> list[Path]:
     return list_files([paths] if isinstance(paths, Path) else paths)

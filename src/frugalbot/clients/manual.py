@@ -2,8 +2,7 @@ from datetime import datetime
 
 import orjson as json
 import pyperclip
-from any_llm.types.completion import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageFunctionToolCall, Choice, Function
-from openai.types.chat import ChatCompletionMessageToolCallUnion
+from any_llm.types.completion import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageToolCall, Choice, Function
 
 from frugalbot.clients.base import LLMClient, LLMClientConfig
 from frugalbot.conversation import Conversation
@@ -18,7 +17,7 @@ from frugalbot.tools.base import Tools
 
 
 def parse_assistant_message(response: str) -> ChatCompletionMessage:
-    tool_calls: list[ChatCompletionMessageToolCallUnion] = []
+    tool_calls: list[ChatCompletionMessageToolCall] = []
     lines = [line for line in response.splitlines() if line.strip()]
     if len(lines) > 1 and lines[1].lstrip()[0] == "{" and response.rstrip()[-1] == "}":
         tool_name = lines[0]
