@@ -6,79 +6,177 @@ Goals of the project:
 - Minimize the context size
 - Minimize costs (by reducing context size AND the number of LLM API calls)
 - Maximize operating efficiency (having the right tools to do the job)
-- Provide general agent functionality beyond coding
+- Provide general agent functionality beyond coding (e.g. knowledge-base management)
 - Maximize transparency of what is sent to the LLM
-- Maximize customizability and extensiblity
+- Maximize customizability and extensibility
 
 ## Features
 
-- **Multi-LLM Support**: Works with Google Gemini (natively), any provider supported by any-llm-sdk ([list](https://docs.mozilla.ai/providers)) and manually (human-in-the-loop)
-- **Rich Tool Ecosystem**: Built-in tools for file operations and code execution
-- **Textual TUI**: Modern terminal user interface built with [Textual](https://textual.textualize.io/)
-- **Session Management**: Save and restore conversation sessions
-- **Token Usage Tracking**: Monitor token consumption and estimated costs
-- **Plugin System**: Extensible architecture with support for custom hooks
-- **Tool Approval Workflow**: Pre-approve tools or require user confirmation for safety
-- **Configuration**: TOML-based configuration system
+- **Multi-LLM Support**: Works with Google Gemini (natively), any provider supported by [any-llm-sdk](https://docs.mozilla.ai/providers) (OpenRouter, Anthropic, OpenAI, etc.), and manual human-in-the-loop mode.
+- **Multi-Agent System**: Run specialized agents (e.g., `coder`, `wiki_master`), cycle between them dynamically, and customize toolsets, prompts, hooks, and client fallbacks per agent.
+- **Cross-Platform Shell Execution**: Built-in `powershell` (Windows) and `bash` (Linux/macOS) execution with AST-level safety evaluation via Tree-sitter and PowerShell AST.
+- **Rich Tool Ecosystem**: File operations (`read`, `write`, `edit` with optional hashline support, `listfiles`), searching (`grep`), code execution (`bash`, `powershell`), and external MCP integration.
+- **Textual TUI**: Modern, responsive terminal UI with live Markdown streaming, elapsed runtime spinners, and real-time token/cost telemetry via models.dev and OpenRouter.
+- **Interactive Completions & History**: Instant `@path` fuzzy file mention/attachment, `/` slash command autocompletion, and `Ctrl+R` prompt history search.
+- **Session Management**: Automatically persist sessions to `~/.frugalbot/sessions/` and restore them via `/load` or CLI flags.
+- **Fine-Grained Safety & Approvals**: Pre-approve trusted command patterns, inspect shell commands AST-by-AST, or prompt for interactive human approval.
+- **Skills Support**: Drop modular `SKILL.md` instructions into `.frugalbot/skills/`, `.agents/skills/`, `.claude/skills/`, or global directories to inject domain workflows on demand.
+- **Extensible Architecture**: Add custom tools, hooks, and slash commands locally or globally.
 
-## Limitations
+## Platform Support
 
-The project has currently only been tested on Windows. Linux and macOS support likely requires small fixes.
+- **Windows**: Supported natively using PowerShell.
+- **Linux**: Supported natively using Bash (tested in CI on Ubuntu).
+- **macOS**: Supported using POSIX/Bash tooling.
 
 ## Getting Started
 
 ### Prerequisites
 
+- Python 3.14+
 - [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) package manager
 
 ### Installation
+
+Install globally via `uv`:
 
 ```bash
 uv tool install git+https://github.com/frugal-ai/frugalbot.git
 ```
 
-or if you want to try it without installing:
+Or run directly without installing:
 
 ```bash
 uvx --from git+https://github.com/frugal-ai/frugalbot.git frugalbot
 ```
 
-### Configuration
+### Initial Configuration
 
-Run frugalbot:
+Run frugalbot once to generate default configuration files:
 
 ```bash
 uv tool run frugalbot
 ```
 
-The first time you run frugalbot, it will generate default config and env files in `~/.frugalbot/`. Open and edit the files to customize them for your environment. The documentation for all configuration options is in the generated config file.
+On first run, default files will be created in `~/.frugalbot/`:
+- `~/.frugalbot/config.toml`: Application configuration, agent definitions, model chains, and tool/hook policies.
+- `~/.frugalbot/.env`: API keys (e.g. `GEMINI_API_KEY`, `OPENROUTER_API_KEY`).
 
-If you're looking for free LLM API options, see [here](https://github.com/mnfst/awesome-free-llm-apis).
+Edit these files with your API keys and preferred models before continuing.
 
 ### Running the Agent
 
-Once you've run frugalbot once and have customized the configuration files, run frugalbot again:
+Start the interactive TUI:
 
 ```bash
 uv tool run frugalbot
-
-# There's a few command-line options available, use --help to see them
-uv tool run frugalbot --help
 ```
 
-### Session Files
+#### Command-Line Options
 
-Sessions are saved in json files under `~/.frugalbot/sessions/`.
+```bash
+# Run in one-shot mode (executes prompt, outputs response, and exits)
+uv tool run frugalbot --one-shot --prompt "Analyze src/frugalbot/agent.py and summarize its main loop"
+
+# Start with an initial prompt in interactive mode
+uv tool run frugalbot --prompt "Fix failing unit tests"
+
+# Resume an existing session file
+uv tool run frugalbot --session-file ~/.frugalbot/sessions/2026-09-12_10-00-00.json
+
+# Run against a specific directory
+uv tool run frugalbot --start-directory /path/to/project
+
+# Use a custom configuration file
+uv tool run frugalbot --config-file ./custom_config.toml
+```
+
+## Interactive TUI Controls
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Alt+Enter` | Submit message or slash command |
+| `Ctrl+A` | Cancel the running agent operation |
+| `Ctrl+N` | Cycle between configured agents (e.g. `coder` ↔ `wiki_master`) |
+| `Alt+P` / `Ctrl+P` | Cycle between configured LLM providers / fallback models |
+| `Ctrl+R` | Search prompt history |
+| `Alt+S` | Toggle auto-scrolling on output |
+| `Alt+U` / `Alt+Up` | Scroll output page up |
+| `Alt+D` / `Alt+Down` | Scroll output page down |
+| `Alt+H` / `Alt+Home` | Scroll output to top |
+| `Alt+E` / `Alt+End` | Scroll output to bottom |
+
+### Mentions and Slash Commands
+
+- **File Mentions (`@path`)**: Type `@` to open the fuzzy file picker. Mentioned files are automatically read and attached to the user prompt context.
+- **Slash Commands (`/`)**: Type `/` to access built-in commands:
+  - `/help`: Show keyboard bindings and navigation modal.
+  - `/new`: Start a fresh conversation session.
+  - `/load <path>`: Load a saved JSON session file.
+  - `/resume`: Resend the conversation state as-is to the LLM.
+  - `/cwd <path>`: Change working directory.
+  - `/copy`: Copy full conversation formatted for web chat interfaces to clipboard.
+  - `/thinking <NONE|LOW|MEDIUM|HIGH>`: Set reasoning level on the fly.
+  - `/learn`: Prompt the model to critique previous steps and produce concise guidelines.
+  - `/skill:<name>`: Run a discovered skill.
+  - `/reload`: Hot-reload configuration, tools, hooks, and commands.
+  - `/quit`: Exit frugalbot.
+
+## Multi-Agent Configuration
+
+Configure agents in `config.toml`. Global settings under `[tools]`, `[hooks]`, `[mcp]`, and `[prompts]` provide defaults that can be customized per agent:
+
+```toml
+[general]
+agents = ["coder", "wiki_master"]
+tool_output_format = "yaml"  # "yaml" (token-efficient) or "json"
+thinking_level = "HIGH"
+
+# Global client definitions
+[clients.google]
+type = "google"
+model = "gemma-4-31b-it"
+api_key_env_var = "GEMINI_API_KEY"
+
+[clients.deepseek_flash]
+type = "anyllm"
+provider = "openrouter"
+model = "deepseek/deepseek-v4-flash"
+api_key_env_var = "OPENROUTER_API_KEY"
+
+# Agent-specific overrides
+[agents.coder]
+clients = ["google", "deepseek_flash"]
+skills = ["find-docs"]
+
+[agents.coder.prompts]
+system_prompt = """
+You are an expert coding assistant operating inside frugalbot.
+{{tools}}
+{{tool_guidelines}}
+{{skills}}
+{{agents_md}}
+"""
+
+[agents.wiki_master.prompts]
+system_prompt = """
+You are an expert knowledge curator following the LLM Wiki pattern.
+{{tools}}
+{{tool_guidelines}}
+"""
+```
 
 ## Extending frugalbot
 
 ### Custom Tools
 
-Create custom tools by placing Python files in `.frugalbot/tools/` (local) or `~/.frugalbot/tools/` (global). Each tool must:
+Create custom tools in `.frugalbot/tools/` (project-local) or `~/.frugalbot/tools/` (global). Each tool must:
 
-1. Inherit from `ToolBase[T]` where `T` is the result type
-2. Have an `__init__` method that accepts a config object (`ToolConfig` or a sub-class of `ToolConfig`)
-3. Implement the async `run` method with properly annotated parameters using `Annotated` for descriptions
+1. Subclass `ToolBase[ResultModel, ConfigModel]`, where `ResultModel` inherits from `pydantic.BaseModel`.
+2. Take its configuration model as the second parameter of `__init__`.
+3. Implement `async def run(...)` with `Annotated` parameter descriptions for schema generation.
 
 ```python
 from typing import Annotated
@@ -90,22 +188,25 @@ class MyToolConfig(ToolConfig):
     api_key: str = ""
 
 
-class MyCustomTool(ToolBase[str]):
+class MyToolResult(pydantic.BaseModel):
+    result: str
+
+
+class MyCustomTool(ToolBase[MyToolResult, MyToolConfig]):
     """Description of what your tool does."""
 
     def __init__(self, config: MyToolConfig):
-        self.config = config
+        super().__init__(config)
 
     async def run(
         self,
         param1: Annotated[str, "Description of param1"],
         param2: Annotated[int, "Description of param2"] = 10,
-    ) -> str:
-        # Your tool logic here
-        return f"Result: {param1} with {param2}"
+    ) -> MyToolResult:
+        return MyToolResult(result=f"Result: {param1} with {param2}")
 ```
 
-Configure your tool in `config.toml`:
+Enable your tool in `config.toml`:
 
 ```toml
 [tools.mycustomtool]
@@ -113,48 +214,51 @@ enabled = true
 api_key = "your-api-key"
 ```
 
-For more examples, see [tools](src/frugalbot/tools/).
-
 ### Custom Hooks
 
-Hooks allow you to intercept and modify agent behavior at specific points. Create custom hooks in `.frugalbot/hooks/` or `~/.frugalbot/hooks/`.
+Hooks intercept lifecycle events to approve tool calls, sanitize prompts, or modify execution flow. Place custom hooks in `.frugalbot/hooks/` or `~/.frugalbot/hooks/`.
 
-Available hook types:
-- `PreUserMessageHook` - Before processing user message
-- `PreSystemMessageHook` - Before rendering system message
-- `PreToolCallHook` - Before a tool is called (can approve/deny)
-- `PostToolCallHook` - After a tool call completes
-- `PreRenderSystemPromptHook` - Before system prompt rendering
-- `PreRenderUserPromptHook` - Before user prompt rendering
-- `AgentStopHook` - When agent decides to stop
-- `AgentFinishedHook` - When agent finishes completely
+Supported hook types:
+- `PreUserMessageHook`: Intercept user message prior to submission.
+- `PreSystemMessageHook`: Intercept rendered system prompt.
+- `PreToolCallHook`: Intercept and approve/deny tool calls.
+- `PostToolCallHook`: Intercept and inspect tool outputs.
+- `PreRenderSystemPromptHook`: Modify template arguments prior to system prompt rendering.
+- `PreRenderUserPromptHook`: Modify template arguments prior to user prompt rendering.
+- `AgentStopHook`: Triggered when the LLM produces no further tool calls.
+- `AgentFinishedHook`: Triggered when the agent loop completes.
 
 ```python
-from frugalbot.hooks.base import HookBase, HookConfig, HookPriority, PreToolCallHook
+from frugalbot.hooks.base import (
+    ApprovalState,
+    HookBase,
+    HookConfig,
+    HookPriority,
+    PreToolCallHook,
+)
 
 
 class MyHookConfig(HookConfig):
-    custom_setting: str = ""
+    blocked_tool: str = "bash"
 
 
-class MyCustomHook(HookBase[PreToolCallHook]):
-    """Description of your hook."""
+class MyCustomHook(HookBase[PreToolCallHook, MyHookConfig]):
+    """Block execution of specific tools."""
 
     def __init__(self, config: MyHookConfig):
-        self.config = config
+        super().__init__(config)
 
-    # priority is only needed if there are multiple hooks of the same type and they need to run in a specific order
     @property
     def priority(self) -> HookPriority:
         return HookPriority.MEDIUM
 
-    async def run(self, hook_data: PreToolCallHook):
+    async def run(self, hook_data: PreToolCallHook) -> None:
         if not self.config.enabled:
             return
-        # Modify hook_data or perform side effects
-        if hook_data.tool_name == "bash":
+
+        if hook_data.tool_name == self.config.blocked_tool:
             hook_data.state = ApprovalState.DENIED
-            hook_data.denied_reason = "Bash is disabled"
+            hook_data.denied_reason = f"Execution of tool '{self.config.blocked_tool}' is blocked by policy."
 ```
 
 Configure hooks in `config.toml`:
@@ -162,18 +266,15 @@ Configure hooks in `config.toml`:
 ```toml
 [hooks.mycustomhook]
 enabled = true
-custom_setting = "value"
+blocked_tool = "bash"
 ```
-
-For more examples, see [hooks](src/frugalbot/hooks/).
 
 ### Custom Commands
 
-Commands are invoked by the user with `/commandname` syntax. Create custom commands in `.frugalbot/commands/` or `~/.frugalbot/commands/`.
+Add custom interactive slash commands by placing modules in `.frugalbot/commands/` or `~/.frugalbot/commands/`:
 
 ```python
 import typer
-
 from frugalbot.ui.commands.base import command
 from frugalbot.ui.tui import Tui
 
@@ -186,77 +287,65 @@ def cmd_hello(ctx: typer.Context) -> None:
     app.run_worker(app.action_submit())
 ```
 
-For more examples, see [commands](src/frugalbot/ui/commands/).
-
 ### MCP (Model Context Protocol) Support
 
-frugalbot supports MCP servers, allowing you to use tools from any MCP-compatible server. At this time only stdio transport is supported.
+frugalbot connects to stdio-based MCP servers and exposes discovered tools under `<server_name>.<tool_name>`.
 
-You can use [mcp-remote](https://github.com/geelen/mcp-remote) to convert any http server into a stdio server.
-
-Configure MCP servers in `config.toml`:
+Configure servers in `config.toml`:
 
 ```toml
-[mcp.servername]
-command = ["npx", "-y", "@modelcontextprotocol/server-name", "arg1", "arg2"]
-enabled = true
-env = { KEY = "value", KEYTWO = "valuetwo" }  # Optional environment variables
-cwd = "/path/to/working/dir"  # Optional working directory for mcp server
-connection_timeout = 60.0  # Connection / start-up timeout in seconds (default: 60.0)
-execution_timeout = 300.0  # Tool execution timeout in seconds (default: 300.0)
-enabled_tools = ["tool1", "tool2"]  # Optional: only enable specific tools
-```
-
-MCP tools are automatically discovered and registered with the format `servername.toolname`. They support the same approval workflows as built-in tools.
-
-Example MCP server configuration:
-
-```toml
-# Serena code intelligence server
-[mcp.serena]
-command = ["uvx", "--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server"]
-
-# Filesystem server
 [mcp.filesystem]
 command = ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]
+enabled = true
+connection_timeout = 60.0
+execution_timeout = 300.0
+enabled_tools = ["read_file", "list_directory"]  # Optional allowlist; defaults to all
 ```
 
 ### Skills
 
-Skills are supported. They must be in one of the following locations:
-- `.frugalbot/skills/` (project-local)
-- `.agents/skills/` (project-local alternative)
-- `.claude/skills/` (project-local alternative)
-- `~/.frugalbot/skills/` (global)
+Skills provide reusable prompts and domain workflows. Create a `SKILL.md` file with frontmatter in any of:
+- `.frugalbot/skills/<skill-name>/SKILL.md`
+- `.agents/skills/<skill-name>/SKILL.md`
+- `.claude/skills/<skill-name>/SKILL.md`
+- `~/.frugalbot/skills/<skill-name>/SKILL.md`
+
+Example:
+
+```markdown
+---
+name: unit-test-writer
+description: Write comprehensive pytest tests following project guidelines
+---
+
+Follow docs/testing_guidelines.md strictly:
+- Given-When-Then structure
+- In-memory isolation
+- 100% test coverage
+```
+
+Skills are indexed automatically into `{{skills}}` in system prompts and can be triggered via `/skill:unit-test-writer`.
 
 ## Development
 
-### Setting Up Development Environment
+### Setting Up Environment
 
 ```bash
-# Install with dev dependencies
-uv sync --group dev
-
-# Run tests
-uv run pytest
-
-# Type checking
-uv run pyright
-
-# Linting and formatting
-uv run ruff check --fix
-uv run ruff format
+# Clone repository and sync dependencies
+git clone https://github.com/frugal-ai/frugalbot.git
+cd frugalbot
+uv sync --all-extras --dev
 ```
 
-### Project Standards
+### Quality Assurance & Testing
 
-This project follows modern Python practices:
+Before submitting changes, run the test and linting pipeline:
 
-- **Python 3.14+** syntax and typing features
-- **`uv`** for package management (replaces pip/poetry/virtualenv)
-- **Ruff** for linting and formatting
-- **Pyright** for static type checking
-- **Pytest** for testing with `pytest-asyncio` for async tests
-- **`src` layout** for proper package structure
+```bash
+uv run ruff format
+uv run ruff check --fix
+uv run pyright
+uv run pytest -q
+```
 
-See [AGENTS.md](AGENTS.md) for architectural standards and coding guidelines.
+All test cases must adhere to [docs/testing_guidelines.md](docs/testing_guidelines.md).
