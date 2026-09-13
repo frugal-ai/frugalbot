@@ -20,6 +20,7 @@ class PromptsConfig(BaseModel):
 
     system_prompt: str = ""
     user_prompt: str = "{{user_message}}"
+    learn_prompt: str = ""
 
 
 class GeneralConfig(BaseModel):
@@ -102,6 +103,8 @@ def load(path: Path) -> Config:
                     agent_config.prompts.system_prompt = raw_config.prompts.system_prompt
             if not agent_config.prompts.user_prompt:
                 agent_config.prompts.user_prompt = raw_config.prompts.user_prompt
+            if not agent_config.prompts.learn_prompt:
+                agent_config.prompts.learn_prompt = raw_config.prompts.learn_prompt
             if not agent_config.clients:
                 agent_config.clients = all_client_names.copy()
 

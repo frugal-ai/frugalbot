@@ -29,6 +29,25 @@ def test_prompts_config_with_default_values_sets_default_user_prompt() -> None:
     assert config.user_prompt == "{{user_message}}"
 
 
+def test_prompts_config_with_default_values_sets_empty_learn_prompt() -> None:
+    # Given / When
+    config = PromptsConfig()
+
+    # Then
+    assert config.learn_prompt == ""
+
+
+def test_prompts_config_with_custom_learn_prompt_stores_string() -> None:
+    # Given
+    data: dict[str, Any] = {"learn_prompt": "Learn: {{ focus }}"}
+
+    # When
+    config = PromptsConfig.model_validate(data)
+
+    # Then
+    assert config.learn_prompt == "Learn: {{ focus }}"
+
+
 def test_prompts_config_with_custom_system_prompt_stores_string() -> None:
     # Given
     data: dict[str, Any] = {"system_prompt": "System: {{ name }}"}
@@ -550,6 +569,83 @@ user_prompt = "User"
 
     # Then
     assert config.agents["coder"].prompts.system_prompt == "Agent System"
+
+
+def test_load_with_global_learn_prompt_propagates_to_agent(fs) -> None:
+    # Given
+    config_file = Path("/config.toml")
+    content = """\
+[general]
+agents = ["coder"]
+tool_output_format = "yaml"
+
+[clients.google]
+type = "google"
+
+[prompts]
+system_prompt = "System"
+user_prompt = "User"
+learn_prompt = "Global Learn: {{ focus }}"
+"""
+    fs.create_file(config_file, contents=content)
+
+    # When
+    config = load(config_file)
+
+    # Then
+    assert config.agents["coder"].prompts.learn_prompt == "Global Learn: {{ focus }}"
+
+
+def test_load_with_agent_specific_learn_prompt_does_not_override(fs) -> None:
+    # Given
+    config_file = Path("/config.toml")
+    content = """\
+[general]
+agents = ["coder"]
+tool_output_format = "yaml"
+
+[clients.google]
+type = "google"
+
+[agents.coder.prompts]
+learn_prompt = "Agent Learn"
+
+[prompts]
+system_prompt = "Global System"
+user_prompt = "User"
+learn_prompt = "Global Learn"
+"""
+    fs.create_file(config_file, contents=content)
+
+    # When
+    config = load(config_file)
+
+    # Then
+    assert config.agents["coder"].prompts.learn_prompt == "Agent Learn"
+
+
+def test_load_without_learn_prompt_leaves_agent_learn_prompt_empty(fs) -> None:
+    # Given
+    config_file = Path("/config.toml")
+    content = """\
+[general]
+agents = ["coder"]
+tool_output_format = "yaml"
+
+[clients.google]
+type = "google"
+
+[prompts]
+system_prompt = "System"
+user_prompt = "User"
+"""
+    fs.create_file(config_file, contents=content)
+
+    # When
+    config = load(config_file)
+
+    # Then
+    assert config.agents["coder"].prompts.learn_prompt == ""
 
 
 def test_load_with_no_clients_in_agent_assigns_all_clients(fs) -> None:
