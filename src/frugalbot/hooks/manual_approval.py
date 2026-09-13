@@ -3,16 +3,28 @@ from typing import Any
 
 import aiofiles
 import orjson as json
+from pydantic import field_validator
 
 from frugalbot.events import QuestionResponse, QuestionType, UserChoiceInteractionEvent, UserCompositeInteractionEvent, bus
 from frugalbot.hooks.base import ApprovalState, HookBase, HookConfig, HookPriority, PreToolCallHook
 from frugalbot.utils.json import json_to_readable_yaml
 
 _APPROVED_TOOLS_JSON_PATH = Path.home() / ".frugalbot/approved_tools.json"
+_IGNORED_ARG_KEYS = frozenset({"timeout_in_seconds"})
+
+
+def _normalize_args(args: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of arguments with transient/non-semantic keys removed."""
+    return {k: v for k, v in args.items() if k not in _IGNORED_ARG_KEYS}
 
 
 class ManualApprovalConfig(HookConfig):
     approved_tool_calls_path: Path = _APPROVED_TOOLS_JSON_PATH
+
+    @field_validator("approved_tool_calls_path")
+    @classmethod
+    def validate_approved_tool_calls_path(cls, v: Path) -> Path:
+        return v.expanduser()
 
 
 class ManualApprovalHook(HookBase[PreToolCallHook, ManualApprovalConfig]):
@@ -20,25 +32,29 @@ class ManualApprovalHook(HookBase[PreToolCallHook, ManualApprovalConfig]):
         self.lazy_init_completed = False
         super().__init__(config)
 
-    async def _load_pre_approved_tools(self):
+    async def _load_pre_approved_tools(self) -> None:
         self.pre_approved_tool_calls: dict[str, list[dict[str, Any]]] = {}
         if self.config.approved_tool_calls_path.exists():
-            async with aiofiles.open(self.config.approved_tool_calls_path) as f:
+            async with aiofiles.open(self.config.approved_tool_calls_path, "rb") as f:
                 self.pre_approved_tool_calls = json.loads(await f.read())
 
     def _is_pre_approved(self, tool_name: str, args: dict[str, Any]) -> bool:
-        if tool_name in self.pre_approved_tool_calls:
-            return any(entry == args for entry in self.pre_approved_tool_calls[tool_name])
-        return False
+        if tool_name not in self.pre_approved_tool_calls:
+            return False
+        normalized_target = _normalize_args(args)
+        return any(_normalize_args(entry) == normalized_target for entry in self.pre_approved_tool_calls[tool_name])
 
-    async def _save_to_pre_approved_tools(self, tool_name: str, args: dict[str, Any]):
+    async def _save_to_pre_approved_tools(self, tool_name: str, args: dict[str, Any]) -> None:
+        normalized_args = _normalize_args(args)
         approved_args = self.pre_approved_tool_calls.setdefault(tool_name, [])
-        if args not in approved_args:
-            approved_args.append(args)
-            async with aiofiles.open(self.config.approved_tool_calls_path, "wb") as f:
+        if not any(_normalize_args(entry) == normalized_args for entry in approved_args):
+            approved_args.append(normalized_args)
+            path = self.config.approved_tool_calls_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(path, "wb") as f:
                 await f.write(json.dumps(self.pre_approved_tool_calls, option=json.OPT_INDENT_2))
 
-    async def _do_manual_approval(self, hook_data: PreToolCallHook):
+    async def _do_manual_approval(self, hook_data: PreToolCallHook) -> None:
         choice_event = UserChoiceInteractionEvent(
             f"LLM wants to call tool '{hook_data.tool_name}' with arguments:\n```yaml\n{json_to_readable_yaml(hook_data.arguments)}\n```\n\nDo you want to execute this tool call?",
             QuestionType.YES_NO_ALWAYS,
