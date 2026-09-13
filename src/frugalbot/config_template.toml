@@ -108,12 +108,12 @@ denied = [
     [["Set-Location"],
     "Never use 'Set-Location'. You're already in the root folder of the project."],
 
-    (["rm"], "Removing files requires explicit approval"),
-    (["eval"], "eval requires explicit approval"),
-    (["source"], "Sourcing a file requires explicit approval"),
-    (["."], "Sourcing a file requires explicit approval"),
-    (["bash", "-c"], "Nested Bash execution requires explicit approval"),
-    (["sh", "-c"], "Nested shell execution requires explicit approval"),
+    [["rm"], "Removing files requires explicit approval"],
+    [["eval"], "eval requires explicit approval"],
+    [["source"], "Sourcing a file requires explicit approval"],
+    [["."], "Sourcing a file requires explicit approval"],
+    [["bash", "-c"], "Nested Bash execution requires explicit approval"],
+    [["sh", "-c"], "Nested shell execution requires explicit approval"],
 ]
 
 [hooks.manualapproval]
