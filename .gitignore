@@ -17,3 +17,4 @@ repomix-output.*
 .coverage
 last_commit
 clean_*.ps1
+transcript.html
