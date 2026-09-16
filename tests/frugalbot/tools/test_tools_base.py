@@ -85,7 +85,23 @@ def test_get_guidelines_by_default_returns_empty_list(tools):
     assert guidelines == []
 
 
-def test_validate_args_with_valid_args_returns_none(tools):
+def test_normalize_args_with_default_implementation_returns_unchanged_dict(tools):
+    # Given
+    class ExampleTool(ToolBase):
+        async def run(self, param1: Annotated[int, "An integer parameter"]) -> str:
+            return "ok"
+
+    tool = ExampleTool(ToolConfig())
+    args = {"param1": 123}
+
+    # When
+    result = tool.normalize_args(args)
+
+    # Then
+    assert result == {"param1": 123}
+
+
+def test_validate_args_with_valid_args_returns_normalized_args(tools):
     # Given
     class ExampleTool(ToolBase):
         async def run(self, param1: Annotated[int, "An integer parameter"]) -> str:
@@ -98,7 +114,29 @@ def test_validate_args_with_valid_args_returns_none(tools):
     result = tool.validate_args(args)
 
     # Then
-    assert result is None
+    assert result == {"param1": 123}
+
+
+def test_validate_args_with_custom_normalize_args_returns_normalized_args(tools):
+    # Given
+    class ExampleTool(ToolBase):
+        async def run(self, param1: Annotated[int, "An integer parameter"]) -> str:
+            return "ok"
+
+        def normalize_args(self, args: dict[str, Any]) -> dict[str, Any]:
+            normalized = dict(args)
+            if "alias" in normalized:
+                normalized["param1"] = normalized.pop("alias")
+            return normalized
+
+    tool = ExampleTool(ToolConfig())
+    args = {"alias": 123}
+
+    # When
+    result = tool.validate_args(args)
+
+    # Then
+    assert result == {"param1": 123}
 
 
 def test_validate_args_with_invalid_args_raises_validation_error(tools):

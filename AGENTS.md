@@ -7,6 +7,7 @@ You are working on the code base of frugalbot, a Python-based coding agent harne
 - Ensure all code, including test code, has full type annotations (including return types) to strictly adhere to python strict typing requirements.
 - Always minimize the length of the output of tools (eg. prefer to run multiple listfiles over running one that recurses over the whole tree).
 - Consult `pyproject.toml` for project dependencies and settings.
+- The `write` and `edit` tools support both `content` and `contents` interchangeably (`contents` for `write` and `new_content` for `edit` remain canonical in the tool schema). Prefer `edit` for existing files.
 - Write tests for any and all code you produce or modify.
 - When writing test code, you must follow the guidelines in `docs/testing_guidelines.md`.
 - When finished with a task, you must run the following in order, fix errors (never fix errors by adding a comment to ignore the error) and re-run until all errors have been resolved:

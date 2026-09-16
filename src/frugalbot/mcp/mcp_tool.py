@@ -77,8 +77,10 @@ class MCPTool(ToolBase[MCPToolResult]):
     def get_guidelines(self) -> list[str]:
         return []
 
-    def validate_args(self, args: dict[str, Any]) -> None:
-        jsonschema.validate(args, self._tool.input_schema)
+    def validate_args(self, args: dict[str, Any]) -> dict[str, Any]:
+        normalized = self.normalize_args(args)
+        jsonschema.validate(normalized, self._tool.input_schema)
+        return normalized
 
     async def run(self, *args: Any, **kwargs: dict[str, Any]) -> MCPToolResult:
         """Delegate to MCP server. Accepts *args for signature compatibility with ToolBase."""

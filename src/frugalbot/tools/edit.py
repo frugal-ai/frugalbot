@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from frugalbot.events import MessageEvent, MessageType, bus
 from frugalbot.tools.base import ToolBase, ToolError
 from frugalbot.tools.hashline_config import HashlineConfig
+from frugalbot.utils.dict import normalize_alias_keys
 from frugalbot.utils.hashline import SingleHashlineEditParams, apply_hashline_edits
 from frugalbot.utils.json import json_to_readable_yaml
 from frugalbot.utils.path import check_and_resolve_path
@@ -28,6 +29,14 @@ class ClassicEditParams(BaseModel):
     old_content: str = Field(..., description="The content to replace. Must appear only once in the file unless replace_all=true.")
     new_content: str = Field(..., description="The new content that will replace the old content. Can be an empty string but cannot be null.")
     replace_all: bool = Field(default=False, description="If false, only perform the replace operation if old_content is unique. If true, all occurrences of old_content will be replaced with new_content")
+
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _normalize_content_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            normalize_alias_keys(data, "old_content", ("old_contents",))
+            normalize_alias_keys(data, "new_content", ("new_contents", "content", "contents"))
+        return data
 
 
 class Edit(ToolBase[EditResult, HashlineConfig]):
@@ -67,6 +76,24 @@ class Edit(ToolBase[EditResult, HashlineConfig]):
             "type": "function",
             "function": {"name": "edit", "description": "Applies edits to a file", "parameters": get_clean_tool_parameters_schema(ClassicEditParams)},
         }
+
+    def normalize_args(self, args: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(args)
+        if self.config.hashline:
+            if "edits" in normalized and isinstance(normalized["edits"], list):
+                new_edits = []
+                for edit in normalized["edits"]:
+                    if isinstance(edit, dict):
+                        edit_copy = dict(edit)
+                        normalize_alias_keys(edit_copy, "new_content", ("new_contents", "content", "contents"))
+                        new_edits.append(edit_copy)
+                    else:
+                        new_edits.append(edit)
+                normalized["edits"] = new_edits
+        else:
+            normalize_alias_keys(normalized, "old_content", ("old_contents",))
+            normalize_alias_keys(normalized, "new_content", ("new_contents", "content", "contents"))
+        return normalized
 
     def _hashline_run(self, **kwargs) -> tuple[EditResult, str]:
         params = HashlineEditParams.model_validate(kwargs)

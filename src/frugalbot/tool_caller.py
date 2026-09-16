@@ -38,7 +38,7 @@ class ToolCaller:
     async def call(self):
         try:
             args_dict = json.loads(self.raw_args_str)
-            self.tools.get(self.tool_call.function.name).validate_args(args_dict)
+            args_dict = self.tools.get(self.tool_call.function.name).validate_args(args_dict)
 
             pre_tc_hook_data = PreToolCallHook(tool_name=self.tool_call.function.name, arguments=args_dict)
             await self.hooks.run(pre_tc_hook_data)

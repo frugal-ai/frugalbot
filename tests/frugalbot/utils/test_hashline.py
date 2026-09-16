@@ -878,3 +878,25 @@ def test_apply_hashline_edits_with_result_context_for_insert_after_shows_inserte
     # Then
     context_block = result[0]
     assert "inserted" in context_block
+
+
+def test_single_hashline_edit_params_with_content_alias_initializes_new_content() -> None:
+    # Given
+    start_hash = "1abcde"
+
+    # When
+    params = SingleHashlineEditParams.model_validate({"start_hash": start_hash, "content": "replacement"})
+
+    # Then
+    assert params.new_content == "replacement"
+
+
+def test_single_hashline_edit_params_with_contents_alias_initializes_new_content() -> None:
+    # Given
+    start_hash = "1abcde"
+
+    # When
+    params = SingleHashlineEditParams.model_validate({"start_hash": start_hash, "contents": "replacement"})
+
+    # Then
+    assert params.new_content == "replacement"

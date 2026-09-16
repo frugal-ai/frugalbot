@@ -1,9 +1,11 @@
 import bisect
 from hashlib import md5
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 from pydantic import BaseModel, Field, model_validator
+
+from frugalbot.utils.dict import normalize_alias_keys
 
 _HASH_STRING_LENGTH = 6
 
@@ -15,6 +17,13 @@ class SingleHashlineEditParams(BaseModel):
         default=None, min_length=_HASH_STRING_LENGTH, max_length=_HASH_STRING_LENGTH, description=f"{_HASH_STRING_LENGTH}-char hash of the end line (inclusive). Omit for single-line edit"
     )
     insert_after: bool = Field(default=False, description="If true, insert the new content after the line specified by start_hash. Cannot be used with end_hash.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_content_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            normalize_alias_keys(data, "new_content", ("new_contents", "content", "contents"))
+        return data
 
     @model_validator(mode="after")
     def validate_constraints(self) -> Self:

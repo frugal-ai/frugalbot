@@ -7,7 +7,7 @@ from jsonschema import ValidationError
 from frugalbot.tools.base import ToolError
 from frugalbot.tools.edit import Edit
 from frugalbot.tools.hashline_config import HashlineConfig
-from frugalbot.utils.hashline import get_contents_with_line_hashes
+from frugalbot.utils.hashline import SingleHashlineEditParams, get_contents_with_line_hashes
 
 
 @pytest.fixture
@@ -276,3 +276,65 @@ def test_description_hashline_disabled_returns_classic_description() -> None:
 
     # Then
     assert "Returns a diff of the file" in description
+
+
+def test_normalize_args_with_classic_mode_aliases_normalizes_to_canonical() -> None:
+    # Given
+    tool = Edit(HashlineConfig(hashline=False))
+    args = {"path": "f.txt", "old_contents": "a", "content": "b"}
+
+    # When
+    result = tool.normalize_args(args)
+
+    # Then
+    assert result == {"path": "f.txt", "old_content": "a", "new_content": "b"}
+
+
+def test_normalize_args_with_classic_mode_both_aliases_prefers_canonical() -> None:
+    # Given
+    tool = Edit(HashlineConfig(hashline=False))
+    args = {"path": "f.txt", "old_content": "a", "new_content": "b", "content": "c"}
+
+    # When
+    result = tool.normalize_args(args)
+
+    # Then
+    assert result == {"path": "f.txt", "old_content": "a", "new_content": "b"}
+
+
+def test_normalize_args_with_hashline_mode_normalizes_nested_edits() -> None:
+    # Given
+    tool = Edit(HashlineConfig(hashline=True))
+    args = {"path": "f.txt", "edits": [{"start_hash": "123456", "content": "val"}]}
+
+    # When
+    result = tool.normalize_args(args)
+
+    # Then
+    assert result == {"path": "f.txt", "edits": [{"start_hash": "123456", "new_content": "val"}]}
+
+
+def test_normalize_args_with_hashline_mode_does_not_inject_classic_keys() -> None:
+    # Given
+    tool = Edit(HashlineConfig(hashline=True))
+    args = {"path": "f.txt", "content": "stray", "edits": [{"start_hash": "123456", "new_content": "val"}]}
+
+    # When
+    result = tool.normalize_args(args)
+
+    # Then
+    assert "new_content" not in result
+    assert result == {"path": "f.txt", "content": "stray", "edits": [{"start_hash": "123456", "new_content": "val"}]}
+
+
+def test_normalize_args_with_hashline_mode_preserves_non_dict_edits() -> None:
+    # Given
+    tool = Edit(HashlineConfig(hashline=True))
+    edit = SingleHashlineEditParams(start_hash="123456", new_content="val")
+    args = {"path": "f.txt", "edits": [edit]}
+
+    # When
+    result = tool.normalize_args(args)
+
+    # Then
+    assert result["edits"] == [edit]

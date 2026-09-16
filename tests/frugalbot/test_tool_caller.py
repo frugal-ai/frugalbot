@@ -58,7 +58,7 @@ def _make_tools(mock_tool: AsyncMock | None = None) -> Tools:
     if mock_tool is None:
         tool = AsyncMock()
         tool.run.return_value = FakeToolResult(output="success")
-        tool.validate_args = MagicMock()
+        tool.validate_args = MagicMock(side_effect=lambda args: args)
         mock_tool = tool
     tools._tools_registry["test_tool"] = mock_tool
     return tools
@@ -112,7 +112,7 @@ def tool_call() -> ChatCompletionMessageFunctionToolCall:
 def mock_tool() -> AsyncMock:
     tool = AsyncMock()
     tool.run.return_value = FakeToolResult(output="success")
-    tool.validate_args = MagicMock()
+    tool.validate_args = MagicMock(side_effect=lambda args: args)
     return tool
 
 
@@ -457,7 +457,7 @@ async def test_call_with_tool_execution_error_appends_error_message_to_conversat
 ) -> None:
     # Given
     failing_tool = AsyncMock()
-    failing_tool.validate_args = MagicMock()
+    failing_tool.validate_args = MagicMock(side_effect=lambda args: args)
     failing_tool.run.side_effect = RuntimeError("Tool failed")
     tools = _make_tools(failing_tool)
     caller = _make_caller(conversation=conversation, tool_call=tool_call, hooks=hooks, tools=tools)
@@ -485,7 +485,7 @@ async def test_call_with_tool_execution_error_returns_none(
 ) -> None:
     # Given
     failing_tool = AsyncMock()
-    failing_tool.validate_args = MagicMock()
+    failing_tool.validate_args = MagicMock(side_effect=lambda args: args)
     failing_tool.run.side_effect = RuntimeError("Tool failed")
     tools = _make_tools(failing_tool)
     caller = _make_caller(conversation=conversation, tool_call=tool_call, hooks=hooks, tools=tools)

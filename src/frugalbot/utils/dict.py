@@ -26,3 +26,28 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
         else:
             merged[key] = copy.deepcopy(value)
     return merged
+
+
+def normalize_alias_keys(
+    target: dict[str, Any],
+    canonical_key: str,
+    aliases: tuple[str, ...] | list[str],
+) -> None:
+    """Normalize alias keys in target dictionary to the canonical key.
+
+    If the canonical key is already present, any alias keys are stripped.
+    If the canonical key is absent, the first present alias is promoted to
+    canonical, and all remaining alias keys are stripped.
+    """
+    if canonical_key in target:
+        for alias in aliases:
+            target.pop(alias, None)
+        return
+
+    for alias in aliases:
+        if alias in target:
+            target[canonical_key] = target.pop(alias)
+            break
+
+    for alias in aliases:
+        target.pop(alias, None)

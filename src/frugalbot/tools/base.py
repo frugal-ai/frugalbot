@@ -81,8 +81,21 @@ class ToolBase[ResultType: pydantic.BaseModel, ConfigType: ToolConfig = ToolConf
 
     async def run(self, *args, **kwargs) -> ResultType: ...
 
-    def validate_args(self, args: dict[str, Any]) -> None:
-        jsonschema.validate(args, self.get_schema()["function"]["parameters"])
+    def normalize_args(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Normalize parameter aliases. Subclasses can override this method.
+
+        Must return the normalized dictionary.
+        """
+        return args
+
+    def validate_args(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Normalize and validate tool arguments against the tool schema.
+
+        Returns the normalized arguments dictionary.
+        """
+        normalized = self.normalize_args(args)
+        jsonschema.validate(normalized, self.get_schema()["function"]["parameters"])
+        return normalized
 
 
 class Tools:
