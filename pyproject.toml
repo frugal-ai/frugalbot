@@ -62,7 +62,7 @@ select = ["E", "F", "I", "UP", "B", "N", "PTH", "TID", "RUF"]
 # Safe auto-fixes: 'I' for imports, 'UP' for syntax updates, 
 # 'E' for standard errors (like None comparisons), and 'RUF' for ruff-specifics.
 fixable = ["E", "I", "UP", "RUF"]
-exclude = []
+exclude = ["scripts/**/*.py"]
 
 [tool.ruff.format]
 quote-style = "double"
