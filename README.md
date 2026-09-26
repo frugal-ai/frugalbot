@@ -12,7 +12,7 @@ Goals of the project:
 
 ## Features
 
-- **Multi-LLM Support**: Works with Google Gemini (natively), any provider supported by [any-llm-sdk](https://docs.mozilla.ai/providers) (OpenRouter, Anthropic, OpenAI, etc.), and manual human-in-the-loop mode.
+- **Multi-LLM Support**: Works with Google Gemini (natively), any provider supported by [any-llm-sdk](https://docs.mozilla.ai/providers) (OpenRouter, Anthropic, OpenAI, etc.), the official GitHub Copilot runtime, and manual human-in-the-loop mode.
 - **Multi-Agent System**: Run specialized agents (e.g., `coder`, `wiki_master`), cycle between them dynamically, and customize toolsets, prompts, hooks, and client fallbacks per agent.
 - **Cross-Platform Shell Execution**: Built-in `powershell` (Windows) and `bash` (Linux/macOS) execution with AST-level safety evaluation via Tree-sitter and PowerShell AST.
 - **Rich Tool Ecosystem**: File operations (`read`, `write`, `edit` with optional hashline support, `listfiles`), searching (`grep`), code execution (`bash`, `powershell`), and external MCP integration.
@@ -168,6 +168,65 @@ You are an expert knowledge curator following the LLM Wiki pattern.
 """
 ```
 
+## GitHub Copilot Client
+
+frugalbot can use the official [GitHub Copilot SDK](https://github.com/github/copilot-sdk) as an LLM
+transport (`type = "copilot"`). It drives the Copilot *runtime* purely as a model backend: frugalbot
+keeps ownership of the agent loop, conversation, tools, hooks, approvals and session persistence.
+Copilot's built-in tools are disabled; frugalbot's own tools are exposed to the model and executed
+locally.
+
+### Prerequisites
+
+1. Install the Copilot runtime (frugalbot never auto-downloads it):
+
+   ```bash
+   python -m copilot download-runtime
+   ```
+
+   Alternatively, point `clients.copilot.cli_path` (or the `COPILOT_CLI_PATH` environment variable)
+   at a pre-installed runtime, or put `copilot-runtime`/`copilot` on your `PATH`.
+2. Provide a GitHub token or PAT in the environment variable named by `api_key_env_var`
+   (populated in `~/.frugalbot/.env`).
+3. Use a model that Copilot offers, or `"auto"`.
+
+If the runtime cannot be found at start-up, frugalbot prints install instructions and exits.
+
+### Configuration
+
+```toml
+[clients.copilot]
+type = "copilot"
+model = "gpt-5"                              # or "auto"
+api_key_env_var = "COPILOT_GITHUB_TOKEN"     # env var holding a GitHub token/PAT
+# output_traceback_on_error = false
+# cli_path = "C:\\path\\to\\copilot-runtime"   # pre-installed runtime; else COPILOT_CLI_PATH
+# base_directory = "~/.frugalbot/copilot"      # SDK state; required by mode="empty"
+# auto_tier = "balance"                        # only used with model = "auto"
+# reasoning_effort = "high"                    # explicit override of the thinking-level map
+```
+
+### Thinking levels
+
+| `thinking_level` | Copilot `reasoning_effort` |
+| --- | --- |
+| `NONE` | omitted |
+| `LOW` | `low` |
+| `MEDIUM` | `high` |
+| `HIGH` | `max` |
+
+Unsupported levels are clamped to the nearest supported level with a warning. `model = "auto"`
+skips reasoning-effort selection and may use `auto_tier = "efficiency" | "balance" | "intelligence" | "fast"`.
+
+### Limitations
+
+- Copilot's own built-in tools, MCP servers, sub-agents, skills and infinite-session compaction are
+  not used; frugalbot owns context and tools.
+- Because the SDK session is stateful and cannot ingest an arbitrary message array, pre-existing
+  history (from `/load` or switching to Copilot mid-conversation) is restored by injecting a
+  rendered transcript into the system prompt at session creation.
+- BYOK custom providers, Azure, and in-process FFI transport are not supported in this client.
+
 ## Extending frugalbot
 
 ### Custom Tools
@@ -216,17 +275,19 @@ api_key = "your-api-key"
 
 ### Custom Hooks
 
-Hooks intercept lifecycle events to approve tool calls, sanitize prompts, or modify execution flow. Place custom hooks in `.frugalbot/hooks/` or `~/.frugalbot/hooks/`.
+Hooks intercept lifecycle events to sanitize messages and prompts, approve or deny tool calls, inspect tool results, or control whether the agent continues. Place custom hook modules (`*.py`) in `.frugalbot/hooks/` or `~/.frugalbot/hooks/`.
 
-Supported hook types:
-- `PreUserMessageHook`: Intercept user message prior to submission.
-- `PreSystemMessageHook`: Intercept rendered system prompt.
-- `PreToolCallHook`: Intercept and approve/deny tool calls.
-- `PostToolCallHook`: Intercept and inspect tool outputs.
-- `PreRenderSystemPromptHook`: Modify template arguments prior to system prompt rendering.
-- `PreRenderUserPromptHook`: Modify template arguments prior to user prompt rendering.
-- `AgentStopHook`: Triggered when the LLM produces no further tool calls.
-- `AgentFinishedHook`: Triggered when the agent loop completes.
+Supported hook types and their mutable data:
+- `PreRenderSystemPromptHook`: Modify the system-prompt template or its arguments before rendering.
+- `PreRenderUserPromptHook`: Modify the user-prompt template or its arguments before rendering.
+- `PreSystemMessageHook`: Modify the rendered system message before it is added to the conversation.
+- `PreUserMessageHook`: Modify a user message before it is added to the conversation.
+- `PreToolCallHook`: Inspect or modify the tool name and arguments, and set the approval state. Tool calls are denied unless a hook sets `state` to `ApprovalState.APPROVED`; `NOT_SET` fails closed.
+- `PostToolCallHook`: Inspect or modify the tool name and JSON result after successful execution, before the result is added to the conversation.
+- `AgentStopHook`: Runs when the LLM responds without tool calls. Set `continue_conversation = True` to continue the conversation.
+- `AgentFinishedHook`: Runs when an agent run finishes. Set `run_again = True` to run the agent loop again.
+
+Implement a hook by subclassing `HookBase[HookEvent, HookConfig]` (or a `HookConfig` subclass). The class name determines its config key: the loader lowercases the class name and removes the `Hook` suffix, so `MyCustomHook` is configured as `mycustom`. Hooks run in ascending priority order (`HIGHEST` through `LOWEST`); the default is `HIGH`. Hooks are not short-circuited, so later hooks may further modify hook data; approval hooks should respect a state already set by an earlier hook.
 
 ```python
 from frugalbot.hooks.base import (
