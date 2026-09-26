@@ -1,7 +1,10 @@
+import os
+import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pytest_mock import MockerFixture
 
 from frugalbot.clients.base import LLMClient, LLMClientConfig, LLMClients, log_retry
 from frugalbot.events import MessageEvent, MessageType
@@ -13,6 +16,12 @@ def clean_registry():
     LLMClients().unload()
     yield
     LLMClients().unload()
+
+
+@pytest.fixture(autouse=True)
+def copilot_runtime(mocker: MockerFixture):
+    """Provide a resolvable pre-installed Copilot runtime so copilot clients can be constructed."""
+    mocker.patch.dict(os.environ, {"COPILOT_CLI_PATH": sys.executable})
 
 
 @pytest.fixture
@@ -149,3 +158,72 @@ async def test_log_retry_with_traceback_enabled_includes_traceback(mock_bus, ret
     message = mock_bus.call_args[0][0].message
     assert "Traceback (most recent call last)" in message
     assert "ValueError: Test Error" in message
+
+
+async def test_llmclient_close_default_is_noop() -> None:
+    """Test that the default close() releases nothing and returns None."""
+    # Given
+    client = LLMClient(LLMClientConfig(name="test_client"))
+
+    # When
+    result = await client.close()
+
+    # Then
+    assert result is None
+
+
+async def test_llmclients_aclose_awaits_close_on_each_client() -> None:
+    """Test that aclose() closes every registered client."""
+    # Given
+    clients = LLMClients()
+    first = MagicMock(spec=LLMClient)
+    first.close = AsyncMock()
+    second = MagicMock(spec=LLMClient)
+    second.close = AsyncMock()
+    clients._clients_registry = [first, second]
+
+    # When
+    await clients.aclose()
+
+    # Then
+    assert first.close.await_count == 1
+    assert second.close.await_count == 1
+
+
+async def test_llmclients_load_with_copilot_type_registers_copilot_client() -> None:
+    """Test discovery of the copilot client by config type."""
+    # Given
+    clients = LLMClients()
+
+    # When
+    clients.load({"copilot_test": {"type": "copilot", "model": "gpt-5", "api_key_env_var": "COPILOT_GITHUB_TOKEN"}})
+
+    # Then
+    assert [type(client).__name__ for client in clients.get_all()] == ["CopilotClient"]
+
+
+async def test_llmclients_load_with_copilot_and_manual_preserves_config_order() -> None:
+    """Test that copilot coexists with other clients in config order."""
+    # Given
+    clients = LLMClients()
+
+    # When
+    clients.load({"first": {"type": "manual"}, "second": {"type": "copilot", "model": "gpt-5", "api_key_env_var": "TOKEN"}})
+
+    # Then
+    assert [type(client).__name__ for client in clients.get_all()] == ["ManualClient", "CopilotClient"]
+
+
+async def test_llmclients_load_copilot_after_unload_does_not_duplicate() -> None:
+    """Test that unloading then reloading copilot does not duplicate registrations."""
+    # Given
+    clients = LLMClients()
+    config = {"copilot_test": {"type": "copilot", "model": "gpt-5", "api_key_env_var": "TOKEN"}}
+    clients.load(config)
+    clients.unload()
+
+    # When
+    clients.load(config)
+
+    # Then
+    assert len(clients.get_all()) == 1

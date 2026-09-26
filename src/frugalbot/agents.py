@@ -113,6 +113,7 @@ class Agents:
     async def reload(self):
         if not self.agents or not self.config_file_path or not self.env_file_path or not self.clients:
             return
+        await self.clients.aclose()
         self.clients.unload()
         for agent in self.agents.values():
             agent.hooks.unload()

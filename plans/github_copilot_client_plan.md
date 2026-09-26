@@ -205,11 +205,7 @@ transcript of the prior turns into the **system message** at creation time:
 ```python
 full_system_prompt = system_prompt
 if restored_transcript:
-    full_system_prompt += (
-        "\n\n## Restored Conversation Context\n"
-        "(Prior turns restored from a frugalbot session; treat as conversation history.)\n"
-        f"{restored_transcript}"
-    )
+    full_system_prompt += f"\n\n## Restored Conversation Context\n(Prior turns restored from a frugalbot session; treat as conversation history.)\n{restored_transcript}"
 ```
 
 - Render with `Conversation.convert_into_web_chat_prompt()` (or a dedicated helper) and apply
@@ -231,10 +227,10 @@ if restored_transcript:
 
 ```python
 self._sdk_client = CopilotClient(
-    mode="empty",                                   # isolation; requires base_directory
+    mode="empty",  # isolation; requires base_directory
     base_directory=self.config.base_directory or str(Path.home() / ".frugalbot" / "copilot"),
-    github_token=github_token,                      # from api_key_env_var
-    working_directory=str(Path.cwd()),              # NOT cwd=
+    github_token=github_token,  # from api_key_env_var
+    working_directory=str(Path.cwd()),  # NOT cwd=
 )
 ```
 
@@ -245,16 +241,16 @@ self._sdk_client = CopilotClient(
 ```python
 session = await self._sdk_client.create_session(
     model=self.model,
-    reasoning_effort=mapped_effort,          # omitted when thinking_level == "NONE" or model == "auto"
+    reasoning_effort=mapped_effort,  # omitted when thinking_level == "NONE" or model == "auto"
     reasoning_summary="none" if not reasoning else None,
     tools=[
         Tool(
             name=schema["name"],
             description=schema["description"],
             parameters=schema["parameters"],
-            handler=None,                     # declaration-only -> external_tool.requested
-            defer="never",                    # keep preloaded; avoid tool-search deferral
-            overrides_built_in_tool=True,      # required for bash/grep; harmless otherwise
+            handler=None,  # declaration-only -> external_tool.requested
+            defer="never",  # keep preloaded; avoid tool-search deferral
+            overrides_built_in_tool=True,  # required for bash/grep; harmless otherwise
         )
         for schema in (tool.get_schema()["function"] for tool in tools.get_all())
     ],
@@ -263,7 +259,7 @@ session = await self._sdk_client.create_session(
     streaming=True,
     infinite_sessions={"enabled": False},
     capi={"auto_tier": self.config.auto_tier} if self.model == "auto" and self.config.auto_tier else None,
-    on_permission_request=PermissionHandler.approve_all,   # defensive; built-ins are excluded
+    on_permission_request=PermissionHandler.approve_all,  # defensive; built-ins are excluded
     # enable_session_telemetry=True,  # only if usage events prove absent under mode="empty"
 )
 ```

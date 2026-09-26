@@ -60,6 +60,26 @@ provider = "openai"
 model = "kimi-k2.6"
 api_key_env_var = "KIMI_AI_API_KEY"
 
+# Uncomment the following to enable the official GitHub Copilot client.
+# Prerequisites:
+#   1. Install the Copilot runtime (auto-download is disabled):
+#        python -m copilot download-runtime
+#      or point COPILOT_CLI_PATH / cli_path at an existing runtime.
+#   2. Put a GitHub token or PAT in the env var below (frugalbot/.env).
+#   3. Use a model offered by Copilot (run `python -m copilot` to list them), or "auto".
+# Thinking levels map as: LOW -> low, MEDIUM -> high, HIGH -> max; unsupported
+# levels are clamped to the nearest supported one with a warning. "auto" skips
+# reasoning effort and can use auto_tier = "efficiency" | "balance" | "intelligence" | "fast".
+# [clients.copilot]
+# type = "copilot"
+# model = "gpt-5"                              # or "auto"
+# api_key_env_var = "COPILOT_GITHUB_TOKEN"     # env var holding a GitHub token/PAT
+# output_traceback_on_error = false
+# cli_path = "C:\\path\\to\\copilot-runtime"   # pre-installed runtime; else COPILOT_CLI_PATH
+# base_directory = "~/.frugalbot/copilot"      # SDK state; required by mode="empty"
+# auto_tier = "balance"                        # only used with model = "auto"
+# reasoning_effort = "high"                    # explicit override of the thinking-level map
+
 # Uncomment the following to enable manual client
 # [clients.manual]
 

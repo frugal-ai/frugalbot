@@ -7,6 +7,7 @@ from pytest_mock import MockerFixture
 from typer.testing import CliRunner
 
 from frugalbot.app import app
+from frugalbot.clients.base import LLMClientError, LLMClients
 
 runner = CliRunner()
 
@@ -390,3 +391,52 @@ def test_main_with_all_options_passes_correct_args_to_tui(app_mocks: _AppMocks, 
     assert str(passed_session_file).endswith("my_session.json")
     assert call_args[0][2] is True
     assert call_args[0][3] == "Run tests"
+
+
+# -- Client errors and shutdown -------------------------------------------------
+
+
+def test_main_when_load_raises_client_error_exits_nonzero(app_mocks: _AppMocks, mocker: MockerFixture) -> None:
+    # Given
+    app_mocks.agents_instance.load = mocker.AsyncMock(side_effect=LLMClientError("The GitHub Copilot runtime is not installed."))
+
+    # When
+    result = runner.invoke(app)
+
+    # Then
+    assert result.exit_code == 1
+
+
+def test_main_when_load_raises_client_error_prints_instructions(app_mocks: _AppMocks, mocker: MockerFixture) -> None:
+    # Given
+    app_mocks.agents_instance.load = mocker.AsyncMock(side_effect=LLMClientError("python -m copilot download-runtime"))
+
+    # When
+    result = runner.invoke(app)
+
+    # Then
+    assert "python -m copilot download-runtime" in result.stdout
+
+
+def test_main_when_load_raises_client_error_does_not_start_tui(app_mocks: _AppMocks, mocker: MockerFixture) -> None:
+    # Given
+    app_mocks.agents_instance.load = mocker.AsyncMock(side_effect=LLMClientError("nope"))
+
+    # When
+    runner.invoke(app)
+
+    # Then
+    app_mocks.tui.run.assert_not_called()
+
+
+def test_main_closes_clients_on_shutdown(app_mocks: _AppMocks, mocker: MockerFixture) -> None:
+    # Given
+    clients = MagicMock(spec=LLMClients)
+    clients.aclose = mocker.AsyncMock()
+    app_mocks.agents_instance.clients = clients
+
+    # When
+    runner.invoke(app)
+
+    # Then
+    clients.aclose.assert_awaited_once()

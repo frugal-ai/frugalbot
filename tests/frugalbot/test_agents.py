@@ -535,3 +535,22 @@ async def test_agents_load_with_nonexistent_config_file_raises_file_not_found_er
     agents = Agents()
     with pytest.raises(FileNotFoundError, match="Config file not found"):
         await agents.load(config_file_path=nonexistent_path)
+
+
+async def test_agents_reload_closes_clients_before_unloading(mocker: MockerFixture) -> None:
+    # Given
+    agents = Agents()
+    agent_mock = MagicMock()
+    agents.agents = {"coder": agent_mock}
+    agents.config_file_path = Path("/home/user/.frugalbot/config.toml")
+    agents.env_file_path = Path("/home/user/.frugalbot/.env")
+    clients = MagicMock(spec=LLMClients)
+    clients.aclose = mocker.AsyncMock()
+    agents.clients = clients
+    mocker.patch.object(Agents, "load", new_callable=AsyncMock)
+
+    # When
+    await agents.reload()
+
+    # Then
+    clients.aclose.assert_awaited_once()

@@ -39,6 +39,9 @@ class LLMClient[ConfigType: LLMClientConfig]:
 
     async def call(self, conversation: Conversation, tools: Tools) -> ChatCompletion: ...
 
+    async def close(self) -> None:
+        """Release any resources held by the client. Default is a no-op."""
+
     @property
     def config(self) -> ConfigType:
         return self._config
@@ -128,6 +131,11 @@ class LLMClients:
     def unload(self) -> None:
         self._clients_registry.clear()
         LLMClient._registry.clear()
+
+    async def aclose(self) -> None:
+        """Asynchronously close every registered client, releasing transport resources."""
+        for client in self._clients_registry:
+            await client.close()
 
     def get_all(self) -> list[LLMClient]:
         return self._clients_registry

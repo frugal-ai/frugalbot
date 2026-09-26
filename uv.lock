@@ -786,6 +786,7 @@ dependencies = [
     { name = "any-llm-sdk", extra = ["all"] },
     { name = "cachier" },
     { name = "dotenv" },
+    { name = "github-copilot-sdk" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "ignore-python" },
@@ -827,6 +828,7 @@ requires-dist = [
     { name = "any-llm-sdk", extras = ["all"], specifier = ">=1.13.0" },
     { name = "cachier", specifier = ">=4.2.0" },
     { name = "dotenv", specifier = ">=0.9.9" },
+    { name = "github-copilot-sdk", specifier = ">=1.0.14" },
     { name = "google-genai", specifier = ">=1.73.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "ignore-python", specifier = ">=0.3.3" },
@@ -869,6 +871,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/00/78/f34251dadb8f3921264a1d9b8946f5e542014ee2614b285261b4e40e6775/fsspec-2026.7.0.tar.gz", hash = "sha256:c803c40f4cf860b49dea58ee3e1c33cb9c790520e233537e1340049f89b82a88", size = 317040, upload-time = "2026-07-28T16:34:51.052Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fd/3c/6a2bf344106328fd04963664a60b9bb6496fc25df8e962fcdc1367285fb9/fsspec-2026.7.0-py3-none-any.whl", hash = "sha256:b57ddbafedfaef7018c1ecab32aa200a9d7ca26b77965f64e48b70061249d279", size = 206583, upload-time = "2026-07-28T16:34:49.538Z" },
+]
+
+[[package]]
+name = "github-copilot-sdk"
+version = "1.0.14"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ed/e2/4d8c622545f55f06773548cf86ffe60f59e6a4cedcc412ff84fcac244b2b/github_copilot_sdk-1.0.14-py3-none-any.whl", hash = "sha256:9f4538cec7295f24507c650d794307396458a51f280a0fbbcd840da177109050", size = 614607, upload-time = "2026-09-16T05:11:14.572Z" },
 ]
 
 [[package]]

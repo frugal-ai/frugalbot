@@ -9,6 +9,7 @@ dependencies = [
     "any-llm-sdk[all]>=1.13.0",
     "cachier>=4.2.0",
     "dotenv>=0.9.9",
+    "github-copilot-sdk>=1.0.14",
     "google-genai>=1.73.1",
     "httpx>=0.28.1",
     "ignore-python>=0.3.3",

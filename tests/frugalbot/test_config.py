@@ -845,3 +845,49 @@ def test_merge_global_with_agent_specific_section_keeps_most_specific_config() -
     assert merged[section_name]["global_specific"] == "gs1"
     assert merged[section_name]["agent_all"] == "aa1"
     assert merged[section_name]["agent_specific"] == "ias1"
+
+
+# =============================================================================
+# GitHub Copilot client config
+# =============================================================================
+
+
+def test_load_with_copilot_client_section_parses(fs) -> None:
+    # Given
+    config_file = Path("/home/user/.frugalbot/config.toml")
+    fs.create_file(
+        config_file,
+        contents="""
+[general]
+agents = ["coder"]
+tool_output_format = "yaml"
+
+[clients.copilot]
+type = "copilot"
+model = "gpt-5"
+api_key_env_var = "COPILOT_GITHUB_TOKEN"
+
+[prompts]
+system_prompt = "You are a test assistant"
+
+[agents.coder]
+""",
+    )
+
+    # When
+    config = load(config_file)
+
+    # Then
+    assert config.clients["copilot"]["type"] == "copilot"
+
+
+def test_config_template_documents_copilot_client() -> None:
+    # Given
+    from importlib import resources
+
+    # When
+    template = (resources.files("frugalbot") / "config_template.toml").read_text(encoding="utf-8")
+
+    # Then
+    assert "[clients.copilot]" in template
+    assert 'type = "copilot"' in template

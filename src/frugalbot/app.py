@@ -8,17 +8,19 @@ from rich.console import Console
 
 import frugalbot.config
 from frugalbot.agents import Agents
+from frugalbot.clients.base import LLMClientError, LLMClients
 from frugalbot.ui.tui import tui
 
 app = typer.Typer(rich_markup_mode="rich", pretty_exceptions_show_locals=False, add_completion=False)
 console = Console(markup=True)
 
 
-async def _app_init(config_file: Path | None, session_file: Path | None, one_shot: bool, prompt: str | None):
+async def _app_init(config_file: Path | None, session_file: Path | None, one_shot: bool, prompt: str | None) -> Agents:
     with console.status("[bold green]Starting...") as status:
         agents = Agents()
         await agents.load(config_file or frugalbot.config.CONFIG_FILE_PATH, status=status)
         tui.init(agents, session_file, one_shot, prompt)
+    return agents
 
 
 @app.command()
@@ -59,7 +61,17 @@ def main(
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(_app_init(config_file, session_file, one_shot, prompt))
-    msg = tui.run(loop=loop)
-    if msg:
-        console.print(msg)
+    agents: Agents | None = None
+    try:
+        try:
+            agents = loop.run_until_complete(_app_init(config_file, session_file, one_shot, prompt))
+        except LLMClientError as e:
+            console.print(f"[red]{e!s}[/red]")
+            raise typer.Exit(code=1) from None
+        msg = tui.run(loop=loop)
+        if msg:
+            console.print(msg)
+    finally:
+        clients = agents.clients if agents is not None else None
+        if isinstance(clients, LLMClients):
+            loop.run_until_complete(clients.aclose())
