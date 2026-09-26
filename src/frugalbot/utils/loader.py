@@ -44,7 +44,10 @@ def load_dynamic_modules(
             if is_pkg or name == "base":
                 continue
             full_name = f"{default_package_name}.{name}"
-            load_or_reload_module(full_name)
+            try:
+                load_or_reload_module(full_name)
+            except Exception as e:
+                print(f"WARNING: Failed to load module {full_name}: {e}")
     except ImportError:
         # If the default package doesn't exist, we skip it and look for local ones
         pass
